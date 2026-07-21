@@ -1,0 +1,28 @@
+name: Weekly Membership Dashboard Data Refresh
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # Monday 8:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  refresh-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build membership dashboard data and write to Google Sheet
+        env:
+          MARIANA_API_KEY: ${{ secrets.MARIANA_API_KEY }}
+          MARIANA_BASE_URL: ${{ secrets.MARIANA_BASE_URL }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/build_membership_dashboard_data.py
