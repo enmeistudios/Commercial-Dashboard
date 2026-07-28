@@ -328,7 +328,14 @@ def build_history(df):
                 week_cancelled[mask].groupby(["studio", "tier", "membership_name"]).size().reset_index(name=f"cancelled_reason_{reason_group}")
             )
         # "other" or blank reason, not already resolved as a switch
-        other_mask = week_cancelled["cancellation_reason"].isna() | (week_cancelled["cancellation_reason"] == "other")
+        # "Other" catches EVERYTHING not explicitly cost/moving/injury --
+        # including blank/"other" reasons, but also upgrade/downgrade/
+        # new_home_studio cancellations that were NOT matched to a real
+        # completed switch (is_switch_cancellation=False for them, so
+        # they correctly count as real churn above, but we still need a
+        # bucket for them here so this breakdown always sums to the same
+        # total as cancelled_count -- no cancellation silently disappears).
+        other_mask = ~week_cancelled["cancellation_reason"].isin({"cost", "moving", "injury"})
         reason_cols["cancelled_reason_other"] = (
             week_cancelled[other_mask].groupby(["studio", "tier", "membership_name"]).size().reset_index(name="cancelled_reason_other")
         )
