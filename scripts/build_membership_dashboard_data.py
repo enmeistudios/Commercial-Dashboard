@@ -60,7 +60,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from config import DASHBOARD_SHEET_ID, TAB_LIVE_STATUS, TAB_HISTORY, TAB_CUSTOMER_LOG
+from config import DASHBOARD_SHEET_ID, TAB_LIVE_STATUS, TAB_HISTORY, TAB_CUSTOMER_LOG, TAB_AGE_PYRAMID
 
 BASE_URL = os.environ.get("MARIANA_BASE_URL", "https://enmei.marianatek.com/api")
 HEADERS = {"Authorization": f"Bearer {os.environ['MARIANA_API_KEY']}"}
@@ -97,6 +97,70 @@ def classify_tier(name):
         return "Unlimited"
 
     return "Other/Unclassified"
+
+
+# Cancellation reasons that mean "customer stayed, just changed something"
+# -- NOT real churn. Confirmed by inspecting real tight-gap cancel->new
+# pairs together with the business (see script history / conversation).
+SWITCH_REASONS = {"upgrade", "downgrade", "new_home_studio"}
+
+# How close a cancellation and a new membership start have to be (in days,
+# either direction) to be considered "the same customer continuing" rather
+# than a real gap/departure.
+SWITCH_GAP_DAYS = 3
+
+# Reasons that represent genuine, controllable churn (the business could
+# potentially act on these) vs uncontrollable churn, for the
+# Controllable/Uncontrollable split. "other" (once cleaned of renewal
+# artifacts) is treated as controllable-unknown.
+CONTROLLABLE_REASONS = {"cost", "other"}
+UNCONTROLLABLE_REASONS = {"moving", "injury"}
+
+
+def detect_switches(df):
+    """
+    Identify cancel->new pairs that represent the SAME customer continuing
+    (an upgrade, downgrade, studio switch, or -- most commonly -- a
+    renewal artifact from a period when some memberships didn't
+    auto-renew and got manually restarted under the same plan).
+
+    Returns two sets of membership `id`s:
+      - switch_old_ids: cancelled memberships that should NOT count as
+        real churn
+      - switch_new_ids: new memberships that should NOT count as a real
+        new signup (since the customer didn't actually leave and come
+        back, they never left)
+    """
+    cancelled = df[df["cancellation_datetime"].notna()][
+        ["id", "user_id", "membership_name", "cancellation_datetime", "cancellation_reason"]
+    ].copy()
+    started = df[["id", "user_id", "membership_name", "start_date"]].copy()
+
+    pairs = cancelled.merge(started, on="user_id", suffixes=("_old", "_new"))
+    pairs = pairs[pairs["id_old"] != pairs["id_new"]]
+    pairs["gap_days"] = (pairs["start_date"] - pairs["cancellation_datetime"]).dt.total_seconds() / 86400
+    close = pairs[pairs["gap_days"].abs() <= SWITCH_GAP_DAYS].copy()
+
+    is_switch_reason = close["cancellation_reason"].isin(SWITCH_REASONS)
+    is_renewal_artifact = (
+        (close["cancellation_reason"].isna() | (close["cancellation_reason"] == "other"))
+        & (close["membership_name_old"] == close["membership_name_new"])
+    )
+    close["is_switch"] = is_switch_reason | is_renewal_artifact
+    close = close[close["is_switch"]]
+
+    # If a cancellation matches multiple candidate new starts (or vice
+    # versa), keep only the closest-in-time match per side
+    close["abs_gap"] = close["gap_days"].abs()
+    best_old = close.sort_values("abs_gap").drop_duplicates("id_old")
+    best_new = close.sort_values("abs_gap").drop_duplicates("id_new")
+
+    switch_old_ids = set(best_old["id_old"])
+    switch_new_ids = set(best_new["id_new"])
+    print(f"Switch/renewal detection: {len(switch_old_ids)} cancellations and "
+          f"{len(switch_new_ids)} new starts reclassified as NOT real churn/signups")
+
+    return switch_old_ids, switch_new_ids
 
 
 def get_all_with_relationships(resource, page_size=100, filters=None):
@@ -168,13 +232,18 @@ def pull_and_clean():
 
     df["renewal_rate"] = pd.to_numeric(df["renewal_rate"], errors="coerce").fillna(0)
 
+    switch_old_ids, switch_new_ids = detect_switches(df)
+    df["is_switch_cancellation"] = df["id"].isin(switch_old_ids)
+    df["is_switch_new"] = df["id"].isin(switch_new_ids)
+
     return df
 
 
 def build_live_status(df):
-    """Current granular status right now, plus cancelled-within-window counts."""
-    today = pd.Timestamp.now(tz="utc")
-
+    """Current granular status right now. Cancelled-within-range is now
+    computed dynamically on the dashboard side from Membership_History,
+    matching whatever timeframe the user has selected -- so no fixed
+    7/30/90-day windows are precomputed here anymore."""
     status_counts = (
         df.groupby(["studio", "tier", "membership_name", "status"])
         .size()
@@ -193,34 +262,28 @@ def build_live_status(df):
         .rename(columns={"renewal_rate": "active_revenue"})
     )
 
-    cancelled_df = df[df["cancellation_datetime"].notna()].copy()
-    cancelled_df["days_since_cancel"] = (today - cancelled_df["cancellation_datetime"]).dt.days
-
     result = status_counts.merge(active_revenue, on=["studio", "tier", "membership_name"], how="left")
     result["active_revenue"] = result["active_revenue"].fillna(0)
-
-    for window in (7, 30, 90):
-        windowed = (
-            cancelled_df[cancelled_df["days_since_cancel"] <= window]
-            .groupby(["studio", "tier", "membership_name"])
-            .size()
-            .reset_index(name=f"cancelled_last_{window}")
-        )
-        result = result.merge(windowed, on=["studio", "tier", "membership_name"], how="left")
-        result[f"cancelled_last_{window}"] = result[f"cancelled_last_{window}"].fillna(0).astype(int)
 
     result.insert(0, "as_of_date", pd.Timestamp.now(tz="utc").date().isoformat())
     return result
 
 
 def build_history(df):
-    """Full weekly reconstruction: active/frozen/new/cancelled counts + revenue, by studio/tier/type."""
+    """Full weekly reconstruction: active/frozen/new/cancelled counts + revenue, by studio/tier/type.
+
+    Upgrades, downgrades, studio switches, and renewal artifacts (see
+    detect_switches) are excluded from new_count and cancelled_count --
+    they're the same customer continuing, not a real departure or a real
+    new signup. cancelled_reason_* columns only ever reflect genuine
+    departures (cost, moving, unresolved other)."""
     valid_start = df["start_date"].notna()
     start = df.loc[valid_start, "start_date"].min().normalize()
     end = pd.Timestamp.now(tz="utc").normalize()
     weeks = pd.date_range(start, end, freq="W-MON")
 
     all_combos = df[["studio", "tier", "membership_name"]].drop_duplicates().reset_index(drop=True)
+    real_churn_df = df[~df["is_switch_cancellation"]]
 
     results = []
     for week in weeks:
@@ -230,23 +293,43 @@ def build_history(df):
         frozen_mask = active_mask & df["freeze_datetime"].notna() & (df["freeze_datetime"] <= week) & (
             df["freeze_reactivation_datetime"].isna() | (df["freeze_reactivation_datetime"] > week)
         )
-        new_mask = (df["start_date"] > week - pd.Timedelta(days=7)) & (df["start_date"] <= week)
-        cancelled_mask = (df["cancellation_datetime"] > week - pd.Timedelta(days=7)) & (df["cancellation_datetime"] <= week)
+        # New signups: exclude anyone whose "new" membership was actually a switch/renewal
+        new_mask = (df["start_date"] > week - pd.Timedelta(days=7)) & (df["start_date"] <= week) & (~df["is_switch_new"])
+        # Cancellations: exclude switch/renewal artifacts entirely
+        cancelled_mask = (real_churn_df["cancellation_datetime"] > week - pd.Timedelta(days=7)) & (real_churn_df["cancellation_datetime"] <= week)
 
         active_grp = df[active_mask].groupby(["studio", "tier", "membership_name"]).agg(
             active_count=("id", "size"), revenue=("renewal_rate", "sum")
         ).reset_index()
         frozen_grp = df[frozen_mask].groupby(["studio", "tier", "membership_name"]).size().reset_index(name="frozen_count")
         new_grp = df[new_mask].groupby(["studio", "tier", "membership_name"]).size().reset_index(name="new_count")
-        cancelled_grp = df[cancelled_mask].groupby(["studio", "tier", "membership_name"]).size().reset_index(name="cancelled_count")
+        cancelled_grp = real_churn_df[cancelled_mask].groupby(["studio", "tier", "membership_name"]).size().reset_index(name="cancelled_count")
+
+        # Cancellation reason breakdown -- genuine churn only
+        week_cancelled = real_churn_df[cancelled_mask]
+        reason_cols = {}
+        for reason_group, reasons in [("cost", {"cost"}), ("moving", {"moving"}), ("injury", {"injury"})]:
+            mask = week_cancelled["cancellation_reason"].isin(reasons)
+            reason_cols[f"cancelled_reason_{reason_group}"] = (
+                week_cancelled[mask].groupby(["studio", "tier", "membership_name"]).size().reset_index(name=f"cancelled_reason_{reason_group}")
+            )
+        # "other" or blank reason, not already resolved as a switch
+        other_mask = week_cancelled["cancellation_reason"].isna() | (week_cancelled["cancellation_reason"] == "other")
+        reason_cols["cancelled_reason_other"] = (
+            week_cancelled[other_mask].groupby(["studio", "tier", "membership_name"]).size().reset_index(name="cancelled_reason_other")
+        )
 
         merged = (all_combos
                   .merge(active_grp, on=["studio", "tier", "membership_name"], how="left")
                   .merge(frozen_grp, on=["studio", "tier", "membership_name"], how="left")
                   .merge(new_grp, on=["studio", "tier", "membership_name"], how="left")
                   .merge(cancelled_grp, on=["studio", "tier", "membership_name"], how="left"))
+        for key, reason_df in reason_cols.items():
+            merged = merged.merge(reason_df, on=["studio", "tier", "membership_name"], how="left")
 
-        for col in ["active_count", "frozen_count", "new_count", "cancelled_count"]:
+        count_cols = ["active_count", "frozen_count", "new_count", "cancelled_count",
+                      "cancelled_reason_cost", "cancelled_reason_moving", "cancelled_reason_injury", "cancelled_reason_other"]
+        for col in count_cols:
             merged[col] = merged[col].fillna(0).astype(int)
         merged["revenue"] = pd.to_numeric(merged["revenue"], errors="coerce").fillna(0)
         merged.insert(0, "week", week.date().isoformat())
@@ -255,18 +338,62 @@ def build_history(df):
     return pd.concat(results, ignore_index=True)
 
 
+AGE_BUCKET_BINS = [0, 30, 60, 90, 180, 365, 730, float("inf")]
+AGE_BUCKET_LABELS = ["0-30 days", "30-60 days", "60-90 days", "3-6 months",
+                      "6-12 months", "12-24 months", "24+ months"]
+
+
+def build_age_pyramid(df):
+    """
+    How long have currently-ongoing members (not cancelled -- includes
+    frozen, same definition used everywhere else) been with us, bucketed
+    by tenure. Uses real start_date. Note: memberships are 6-month
+    commitments with an option to renew -- the 3-6 / 6-12 month buckets
+    straddle that natural renewal decision point, worth keeping in mind
+    when interpreting any drop-off there (may be normal non-renewal, not
+    necessarily dissatisfaction).
+    """
+    today = pd.Timestamp.now(tz="utc")
+    ongoing = df[df["cancellation_datetime"].isna()].copy()
+    ongoing["age_days"] = (today - ongoing["start_date"]).dt.days
+    ongoing["age_bucket"] = pd.cut(ongoing["age_days"], bins=AGE_BUCKET_BINS, labels=AGE_BUCKET_LABELS, right=False)
+
+    result = (
+        ongoing.groupby(["studio", "tier", "membership_name", "age_bucket"])
+        .size()
+        .reset_index(name="count")
+    )
+    result["age_bucket"] = result["age_bucket"].astype(str)
+    result.insert(0, "as_of_date", today.date().isoformat())
+    return result
+
+
 def build_customer_log(df):
-    """One row per membership instance -- IDs only, no PII."""
+    """One row per membership instance -- IDs only, no PII.
+
+    Includes an estimated term_end_date (start_date + commitment_length
+    months) so the dashboard can flag members nearing the end of their
+    6-month commitment term, without exposing any names/emails -- staff
+    look up the customer_id directly in Mariana Tek for outreach. A
+    separate private (non-published) sheet with real names is a planned
+    follow-up, not yet built."""
     log_df = df[[
         "id", "user_id", "membership_id", "membership_name", "tier", "studio",
         "status", "start_date", "cancellation_datetime", "freeze_datetime",
-        "freeze_reactivation_datetime", "renewal_rate",
+        "freeze_reactivation_datetime", "renewal_rate", "commitment_length",
     ]].copy()
     log_df.columns = [
         "membership_instance_id", "customer_id", "membership_id", "membership_name",
         "tier", "studio", "status", "start_date", "cancellation_datetime",
-        "freeze_datetime", "freeze_reactivation_datetime", "renewal_rate",
+        "freeze_datetime", "freeze_reactivation_datetime", "renewal_rate", "commitment_length",
     ]
+
+    def compute_term_end(row):
+        if pd.isna(row["start_date"]) or pd.isna(row["commitment_length"]):
+            return None
+        return row["start_date"] + pd.DateOffset(months=int(row["commitment_length"]))
+
+    log_df["term_end_date"] = log_df.apply(compute_term_end, axis=1)
     return log_df
 
 
@@ -306,6 +433,10 @@ def main():
     history_df = build_history(df)
     print(f"History: {history_df.shape[0]} rows")
 
+    print("\nBuilding membership age pyramid...")
+    age_pyramid_df = build_age_pyramid(df)
+    print(f"Age pyramid: {age_pyramid_df.shape[0]} rows")
+
     print("\nBuilding customer log (IDs only, no PII)...")
     customer_log_df = build_customer_log(df)
     print(f"Customer log: {customer_log_df.shape[0]} rows")
@@ -316,12 +447,15 @@ def main():
         print(live_status_df.head(10).to_string())
         print("\n--- History (tail) ---")
         print(history_df.tail(10).to_string())
+        print("\n--- Age pyramid ---")
+        print(age_pyramid_df.to_string())
         print("\n--- Customer log (head) ---")
         print(customer_log_df.head(10).to_string())
         return
 
     write_to_sheet(live_status_df, TAB_LIVE_STATUS)
     write_to_sheet(history_df, TAB_HISTORY)
+    write_to_sheet(age_pyramid_df, TAB_AGE_PYRAMID)
     write_to_sheet(customer_log_df, TAB_CUSTOMER_LOG)
 
 
