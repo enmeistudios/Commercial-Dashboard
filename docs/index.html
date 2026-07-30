@@ -304,6 +304,11 @@ tbody tr:hover td{background:var(--bg3)}
 
   <div class="mgrid" id="rev-metrics"></div>
 
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">MRR over time</div><div class="ccs">By calendar month, matching the live MRR definition (excludes frozen). Does not exclude payment-failure periods historically -- see Definitions page</div></div></div>
+    <div class="h260"><canvas id="chartMrrOverTime"></canvas></div>
+  </div>
+
   <div class="cr cr2">
     <div class="cc"><div class="cch"><div><div class="cct">MRR by tier</div><div class="ccs">Right now</div></div></div><div class="h260"><canvas id="chartRevenueTier"></canvas></div></div>
     <div class="cc"><div class="cch"><div><div class="cct">MRR by membership type</div><div class="ccs">Right now</div></div></div><div class="h260"><canvas id="chartRevenueType"></canvas></div></div>
@@ -474,6 +479,12 @@ tbody tr:hover td{background:var(--bg3)}
 
         <dt class="caveat">Caveat: upgrades, downgrades &amp; studio switches are not counted as churn</dt>
         <dd>When a cancellation is followed within 3 days by a new membership for the same customer, it's treated as a plan change or studio switch, not a real departure. These pairs are excluded from both cancelled and new-signup counts everywhere. If a cancellation is labeled upgrade/downgrade/new_home_studio but no matching new membership was found within 3 days, it still counts as real churn -- it shows up in the "Other" bucket of the cancellation-reasons chart, since "Other" catches everything not explicitly cost/moving/injury. This keeps the reasons breakdown always summing to the same total as the top-level "Cancelled" count.</dd>
+
+        <dt>MRR over time (Revenue page)</dt>
+        <dd>Each calendar month shows the last available weekly snapshot within that month (not a sum of all weeks -- revenue is a point-in-time total, summing weeks would multiply-count the same ongoing revenue). Excludes frozen memberships to match the live MRR definition exactly.</dd>
+
+        <dt class="caveat">Caveat: historical MRR doesn't exclude payment failures</dt>
+        <dd>Unlike frozen periods (which have clean start/end dates we can reconstruct), there's no clear "payment failure resolved" date in the data -- so MRR over time can't precisely exclude payment-failure weeks the way live "right now" MRR does. This means historical MRR may run very slightly higher than true MRR during weeks with active payment failures. Frozen exclusion is exact; payment-failure exclusion is not yet possible historically.</dd>
 
         <dt class="caveat">Caveat: freeze fees not tracked</dt>
         <dd>The £30 freeze fee (first month free) is not yet reflected in MRR or revenue figures.</dd>
@@ -915,6 +926,27 @@ function renderRevenue() {
   document.getElementById('rev-metrics').innerHTML = `
     <div class="mc pos"><div class="ml">Monthly Recurring Revenue</div><div class="mv">${fK(currentMRR)}</div></div>
   `;
+
+  // MRR over time: revenue is a SNAPSHOT per week (total recurring revenue
+  // as of that week), not a flow -- so we take the LAST week within each
+  // calendar month as that month's representative value, not sum weeks
+  // together (which would multiply-count the same ongoing revenue ~4x).
+  const historyForMrr = getHistoryRows('rev');
+  const lastWeekPerMonth = new Map();
+  for (const row of historyForMrr) {
+    const month = row.week.slice(0, 7);
+    if (!lastWeekPerMonth.has(month) || row.week > lastWeekPerMonth.get(month)) lastWeekPerMonth.set(month, row.week);
+  }
+  const months = Array.from(lastWeekPerMonth.keys()).sort();
+  const monthlyMrrSeries = months.map(month => {
+    const targetWeek = lastWeekPerMonth.get(month);
+    const total = historyForMrr.filter(r => r.week === targetWeek).reduce((s, r) => s + (Number(r.active_only_revenue) || 0), 0);
+    return { month, mrr: total };
+  });
+
+  mk('chartMrrOverTime', { type: 'line', data: { labels: monthlyMrrSeries.map(m => m.month), datasets: [{
+    data: monthlyMrrSeries.map(m => m.mrr), borderColor: C.enmei, backgroundColor: 'rgba(232,68,42,0.1)', fill: true, tension: .3, pointRadius: 3,
+  }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: yscCurrency() } } });
 
   mk('chartRevenueTier', { type: 'bar', data: { labels: byTier.map(g => g.group), datasets: [{ data: byTier.map(g => g.revenue), backgroundColor: C.enmei, borderRadius: 4, borderSkipped: false }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: yscCurrency() } } });
