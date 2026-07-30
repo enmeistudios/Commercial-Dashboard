@@ -290,7 +290,17 @@ def build_history(df):
     detect_switches) are excluded from new_count and cancelled_count --
     they're the same customer continuing, not a real departure or a real
     new signup. cancelled_reason_* columns only ever reflect genuine
-    departures (cost, moving, unresolved other)."""
+    departures (cost, moving, unresolved other).
+
+    Two revenue fields are produced per week:
+      - revenue: sum of renewal_rate for all ongoing (not cancelled)
+        memberships that week, INCLUDING frozen ones.
+      - active_only_revenue: revenue minus frozen_revenue -- matches the
+        live MRR definition (strictly "active" status only), for a
+        historical MRR trend that's comparable to the "right now" MRR
+        figure. Does NOT exclude payment_failure periods historically
+        (no clean "resolved" date exists for that), so this is a close
+        match to live MRR, not a perfect one, during payment-failure weeks."""
     valid_start = df["start_date"].notna()
     start = df.loc[valid_start, "start_date"].min().normalize()
     end = pd.Timestamp.now(tz="utc").normalize()
@@ -315,7 +325,9 @@ def build_history(df):
         active_grp = df[active_mask].groupby(["studio", "tier", "membership_name"]).agg(
             active_count=("id", "size"), revenue=("renewal_rate", "sum")
         ).reset_index()
-        frozen_grp = df[frozen_mask].groupby(["studio", "tier", "membership_name"]).size().reset_index(name="frozen_count")
+        frozen_grp = df[frozen_mask].groupby(["studio", "tier", "membership_name"]).agg(
+            frozen_count=("id", "size"), frozen_revenue=("renewal_rate", "sum")
+        ).reset_index()
         new_grp = df[new_mask].groupby(["studio", "tier", "membership_name"]).size().reset_index(name="new_count")
         cancelled_grp = real_churn_df[cancelled_mask].groupby(["studio", "tier", "membership_name"]).size().reset_index(name="cancelled_count")
 
@@ -353,6 +365,14 @@ def build_history(df):
         for col in count_cols:
             merged[col] = merged[col].fillna(0).astype(int)
         merged["revenue"] = pd.to_numeric(merged["revenue"], errors="coerce").fillna(0)
+        merged["frozen_revenue"] = pd.to_numeric(merged["frozen_revenue"], errors="coerce").fillna(0)
+        # active_only_revenue matches the live MRR definition (excludes frozen).
+        # NOTE: does NOT exclude payment_failure periods historically, since we
+        # don't have a clear "payment failure resolved" date to reconstruct
+        # that timing -- unlike frozen_datetime/freeze_reactivation_datetime,
+        # which give us clean start/end boundaries. This is an approximation,
+        # not a perfect match to live MRR, for weeks with active payment failures.
+        merged["active_only_revenue"] = merged["revenue"] - merged["frozen_revenue"]
         merged.insert(0, "week", week.date().isoformat())
         results.append(merged)
 
