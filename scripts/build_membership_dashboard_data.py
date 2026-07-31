@@ -292,6 +292,10 @@ def build_history(df):
     new signup. cancelled_reason_* columns only ever reflect genuine
     departures (cost, moving, unresolved other).
 
+    cancelled_tenure_month1..month6plus: for genuine departures, how many
+    days into their membership they were when they cancelled, bucketed
+    by month of tenure -- powers the dropoff/intervention-point analysis.
+
     Two revenue fields are produced per week:
       - revenue: sum of renewal_rate for all ongoing (not cancelled)
         memberships that week, INCLUDING frozen ones.
@@ -352,6 +356,20 @@ def build_history(df):
             week_cancelled[other_mask].groupby(["studio", "tier", "membership_name"]).size().reset_index(name="cancelled_reason_other")
         )
 
+        # Dropoff / intervention point analysis: how many days into their
+        # membership were people when they cancelled? Bucketed by month of
+        # tenure (Month 1 = 0-30 days in, ... Month 6+ = 151+ days in),
+        # since memberships are 6-month commitments -- this shows whether
+        # cancellations cluster around a specific point in the commitment.
+        tenure_days = (week_cancelled["cancellation_datetime"] - week_cancelled["start_date"]).dt.days
+        tenure_bucket_bounds = [(0, 30, "month1"), (31, 60, "month2"), (61, 90, "month3"),
+                                 (91, 120, "month4"), (121, 150, "month5"), (151, 10_000, "month6plus")]
+        for lo, hi, bucket_name in tenure_bucket_bounds:
+            mask = (tenure_days >= lo) & (tenure_days <= hi)
+            reason_cols[f"cancelled_tenure_{bucket_name}"] = (
+                week_cancelled[mask].groupby(["studio", "tier", "membership_name"]).size().reset_index(name=f"cancelled_tenure_{bucket_name}")
+            )
+
         merged = (all_combos
                   .merge(active_grp, on=["studio", "tier", "membership_name"], how="left")
                   .merge(frozen_grp, on=["studio", "tier", "membership_name"], how="left")
@@ -361,7 +379,9 @@ def build_history(df):
             merged = merged.merge(reason_df, on=["studio", "tier", "membership_name"], how="left")
 
         count_cols = ["active_count", "frozen_count", "new_count", "cancelled_count",
-                      "cancelled_reason_cost", "cancelled_reason_moving", "cancelled_reason_injury", "cancelled_reason_other"]
+                      "cancelled_reason_cost", "cancelled_reason_moving", "cancelled_reason_injury", "cancelled_reason_other",
+                      "cancelled_tenure_month1", "cancelled_tenure_month2", "cancelled_tenure_month3",
+                      "cancelled_tenure_month4", "cancelled_tenure_month5", "cancelled_tenure_month6plus"]
         for col in count_cols:
             merged[col] = merged[col].fillna(0).astype(int)
         merged["revenue"] = pd.to_numeric(merged["revenue"], errors="coerce").fillna(0)
