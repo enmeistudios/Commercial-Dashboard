@@ -1,0 +1,38 @@
+name: Daily Membership Dashboard Data Refresh
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Daily, 8:00 UTC
+  workflow_dispatch:
+    inputs:
+      debug_only:
+        description: 'Debug only -- inspect data in logs, skip writing to Google Sheets'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  refresh-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build membership dashboard data and write to Google Sheet
+        env:
+          MARIANA_API_KEY: ${{ secrets.MARIANA_API_KEY }}
+          MARIANA_BASE_URL: ${{ secrets.MARIANA_BASE_URL }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          DEBUG_ONLY_SKIP_SHEET_WRITE: ${{ github.event.inputs.debug_only || 'false' }}
+        run: python scripts/build_membership_dashboard_data.py
