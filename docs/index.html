@@ -417,12 +417,12 @@ tbody tr:hover td{background:var(--bg3)}
   </div>
 
   <div class="cc" style="margin-bottom:16px">
-    <div class="cch"><div><div class="cct">When do post-term dropoffs happen?</div><div class="ccs">Among the "did not continue" group above, how many months after completing their term did they actually cancel? Dynamic range -- extends as far as real data goes.</div></div></div>
+    <div class="cch"><div><div class="cct">Cancellations after renewal: how long into the NEW term?</div><div class="ccs">Only counts people who completed their first 6-month term and renewed, then later cancelled for real. "1 month" means they cancelled within their first month of the renewed term -- these are months into the new commitment, not the original one. A cluster near the start means the renewal itself isn't sticking; a cluster near month 6 of the new term means the same 6-month decision point is repeating.</div></div></div>
     <div class="h260"><canvas id="chartPostTermDropoff"></canvas></div>
   </div>
 
   <div class="cc" style="margin-bottom:16px">
-    <div class="cch"><div><div class="cct">Dropoff timing (all genuine departures)</div><div class="ccs">Among genuine departures in the selected range, how many months into their membership were they when they cancelled -- including early leavers who never reached term end. Dynamic range, no cap.</div></div></div>
+    <div class="cch"><div><div class="cct">Dropoff timing (all genuine departures)</div><div class="ccs">"Genuine" excludes upgrades, downgrades, and studio switches -- those aren't real departures. Among genuine departures in the selected range, how many months into their membership were they when they cancelled -- including early leavers who never reached term end. Dynamic range, no cap.</div></div></div>
     <div class="h260"><canvas id="chartDropoff"></canvas></div>
   </div>
 
@@ -502,11 +502,11 @@ tbody tr:hover td{background:var(--bg3)}
         <dt>Post-term continuation: did they stay after completing 6 months?</dt>
         <dd>Cohort = memberships whose 6-month term end date falls within the selected timeframe AND has already passed. Critically, anyone who cancelled BEFORE reaching their term end is excluded entirely from this cohort -- they never completed the term, so they're not part of this question. Within the remaining cohort: "Continued" = never cancelled, or cancelled but it was a plan switch/upgrade (not a real departure). "Did not continue" = a genuine cancellation that happened at or after their term end. Because this is scoped by term end date (not cancellation date), the numbers genuinely change as you adjust the timeframe above.</dd>
 
-        <dt>When do post-term dropoffs happen?</dt>
-        <dd>For the "did not continue" group above only: months between their term end date and their actual cancellation date. Bucket range is dynamic -- extends as far as real data goes, no artificial cap.</dd>
+        <dt>Cancellations after renewal: how long into the NEW term?</dt>
+        <dd>For the "did not continue" group only (from Post-term continuation above): months between their term end date (when they renewed) and their actual cancellation date. "Renewed +1mo" means 1 month into the NEW term, not the original 6-month commitment -- these people already completed their first term successfully. Dynamic range -- extends as far as real data goes, no artificial cap.</dd>
 
         <dt>Dropoff timing (all genuine departures)</dt>
-        <dd>Months between membership start date and cancellation date, for every genuine departure in the selected range (including early leavers, unlike the post-term chart above). Shown as % share of departures per month, so the shape is comparable even when comparing periods with very different total volumes. Dynamic month range, no cap.</dd>
+        <dd>Months between membership start date and cancellation date, for every genuine departure in the selected range -- including early leavers who never reached their 6-month term end, unlike the chart above. Excludes upgrades, downgrades, and studio switches, same as everywhere else on this page. Shown as % share of departures per month, so the shape is comparable even when comparing periods with very different total volumes. Dynamic month range, no cap.</dd>
 
         <dt class="caveat">Caveat: tier classification</dt>
         <dd>Tiers are assigned by matching keywords in each membership's name. A few edge cases were manually resolved with the business.</dd>
@@ -1169,7 +1169,7 @@ function renderChurn() {
     postTermMonthCounts.set(m, (postTermMonthCounts.get(m) || 0) + 1);
     maxPostTermMonth = Math.max(maxPostTermMonth, m);
   });
-  const postTermLabels = Array.from({ length: maxPostTermMonth || 1 }, (_, i) => `Month ${i + 1}`);
+  const postTermLabels = Array.from({ length: maxPostTermMonth || 1 }, (_, i) => `Renewed +${i + 1}mo`);
   const postTermData = postTermLabels.map((_, i) => postTermMonthCounts.get(i + 1) || 0);
   mk('chartPostTermDropoff', { type: 'bar', data: { labels: postTermLabels, datasets: [{ data: postTermData, backgroundColor: C.neg, borderRadius: 4, borderSkipped: false }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: ysc() } } });
@@ -1281,24 +1281,24 @@ function renderTenureMix() {
     if (r.cancellation_datetime && new Date(r.cancellation_datetime) <= asOfDate) return false;
     return true;
   });
-  const pyramidTotals = {};
-  AGE_BUCKET_ORDER.forEach(b => pyramidTotals[b] = 0);
+  // Uniform monthly buckets (Month 1, 2, 3...), extending as far as real
+  // data goes -- lets clustering around the 6-month renewal point (and
+  // 12 months, 18 months, etc.) show up naturally, rather than being
+  // smoothed away by a coarse "3-6 months" style bucket.
+  const monthCounts = new Map();
+  let maxMonth = 0;
   ongoingAsOfDate.forEach(r => {
     const ageDays = Math.floor((asOfDate - new Date(r.start_date)) / (1000 * 60 * 60 * 24));
-    let bucket;
-    if (ageDays < 30) bucket = "0-30 days";
-    else if (ageDays < 60) bucket = "30-60 days";
-    else if (ageDays < 90) bucket = "60-90 days";
-    else if (ageDays < 180) bucket = "3-6 months";
-    else if (ageDays < 365) bucket = "6-12 months";
-    else if (ageDays < 730) bucket = "12-24 months";
-    else bucket = "24+ months";
-    pyramidTotals[bucket]++;
+    const month = Math.floor(ageDays / 30.44) + 1;
+    monthCounts.set(month, (monthCounts.get(month) || 0) + 1);
+    maxMonth = Math.max(maxMonth, month);
   });
+  const tenureLabels = Array.from({ length: maxMonth || 1 }, (_, i) => `Month ${i + 1}`);
+  const tenureData = tenureLabels.map((_, i) => monthCounts.get(i + 1) || 0);
   document.getElementById('tenure-mix-sub').textContent = asOfToday
-    ? 'How long members were with us, right now. Memberships are 6-month commitments with an option to renew -- drop-off around the 3-6/6-12 month buckets may reflect natural non-renewal, not dissatisfaction'
-    : `Reconstructed for ${toISO(asOfDate)}. Memberships are 6-month commitments with an option to renew -- drop-off around the 3-6/6-12 month buckets may reflect natural non-renewal, not dissatisfaction`;
-  mk('chartAgePyramid', { type: 'bar', data: { labels: AGE_BUCKET_ORDER, datasets: [{ data: AGE_BUCKET_ORDER.map(b => pyramidTotals[b]), backgroundColor: C.teal, borderRadius: 4, borderSkipped: false }] },
+    ? 'How long members were with us, right now, broken out by month. Memberships are 6-month commitments with an option to renew -- watch for clustering right around Month 6, Month 12, etc., which reflects the renewal decision point, not necessarily dissatisfaction'
+    : `Reconstructed for ${toISO(asOfDate)}, broken out by month. Memberships are 6-month commitments with an option to renew -- watch for clustering right around Month 6, Month 12, etc., which reflects the renewal decision point, not necessarily dissatisfaction`;
+  mk('chartAgePyramid', { type: 'bar', data: { labels: tenureLabels, datasets: [{ data: tenureData, backgroundColor: C.teal, borderRadius: 4, borderSkipped: false }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: ysc() } } });
 }
 
