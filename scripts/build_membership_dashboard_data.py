@@ -73,6 +73,7 @@ EXCLUDED_NAME_KEYWORDS = ["1 week unlimited", "recovery"]
 # Exact-name matches (lowercase) for the short-term/promo Unlimited tier.
 PROMO_UNLIMITED_NAMES = {
     "2 week unlimited", "one month unlimited", "spring sale - unlimited monthly",
+    "summer strong",
 }
 
 
