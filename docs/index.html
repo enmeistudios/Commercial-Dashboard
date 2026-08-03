@@ -582,6 +582,26 @@ tbody tr:hover td{background:var(--bg3)}
     <div style="height:320px"><canvas id="chartIntroSankey"></canvas></div>
   </div>
 
+  <div class="tc">
+    <div class="tch"><span class="tct">Head-to-head: 1 Week Unlimited vs. Welcome 3</span><span class="ccs" style="margin:0">Always shows both, regardless of the intro type dropdown above -- respects date range/studio</span></div>
+    <div class="tscroll">
+      <table id="io-headtohead-table">
+        <thead><tr><th>Intro Type</th><th>Starters</th><th>Converted (membership)</th><th>Converted (pack)</th><th>Hopped</th><th>Casual Only</th><th>No Further</th><th>Converted within 30d</th></tr></thead>
+        <tbody id="io-headtohead-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tc">
+    <div class="tch"><span class="tct">1 Week Unlimited by studio</span><span class="ccs" style="margin:0">Chelsea vs. Marylebone -- always shows both, ignores the studio toggle above. Welcome 3 has no studio breakdown (studio-agnostic by design)</span></div>
+    <div class="tscroll">
+      <table id="io-studio-table">
+        <thead><tr><th>Studio</th><th>Starters</th><th>Converted (membership)</th><th>Converted (pack)</th><th>Hopped</th><th>Casual Only</th><th>No Further</th><th>Converted within 30d</th></tr></thead>
+        <tbody id="io-studio-body"></tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="cc" style="margin-bottom:16px">
     <div class="cch"><div><div class="cct">Does showing up predict conversion?</div><div class="ccs" id="attendance-sub">Real check-in data, joined to lifetime outcomes. If "Both types" is selected above, this defaults to showing 1 Week Unlimited (the stronger, cleaner signal) -- switch the intro type dropdown to see Welcome 3's instead.</div></div></div>
     <div class="mgrid" id="io-attendance-stats" style="margin-bottom:12px"></div>
@@ -589,8 +609,40 @@ tbody tr:hover td{background:var(--bg3)}
   </div>
 
   <div class="cr cr2">
-    <div class="cc"><div class="cch"><div><div class="cct">Time to convert (membership)</div><div class="ccs">Days between the intro offer and the actual membership purchase, for those who converted</div></div></div><div class="h260"><canvas id="chartTimeToConvert"></canvas></div></div>
+    <div class="cc"><div class="cch"><div><div class="cct">Time to convert (membership)</div><div class="ccs" id="time-to-convert-sub">Days between the intro offer starting and the actual membership purchase</div></div></div><div class="h260"><canvas id="chartTimeToConvert"></canvas></div></div>
     <div class="cc"><div class="cch"><div><div class="cct">Starters &amp; conversions over time</div><div class="ccs">Per week, for the selected filters</div></div></div><div class="h260"><canvas id="chartIntroTrend"></canvas></div></div>
+  </div>
+
+  <div class="legend">
+    <h3>Definitions &amp; Methodology</h3>
+    <div class="legend-grid">
+      <dl>
+        <dt>What "timeframe" filters on</dt>
+        <dd>The date range/timeframe control at the top filters by when the intro offer STARTED (intro_date), not when someone converted. So "28D" means "people who started an intro offer in the last 28 days" -- their eventual outcome (conversion, hopping, etc.) is tracked however long it actually took, even if that happened after the 28-day window ended. This is why a very recent timeframe (like 7D) will show mostly "No Further Purchase" -- those people simply haven't had time to do anything else yet.</dd>
+
+        <dt>"Converted" (lifetime outcome)</dt>
+        <dd>Not just their very next purchase -- tracks forward however long it takes, using real purchase dates. Someone who took 4 months to buy a membership still counts as converted.</dd>
+
+        <dt>Outcome classification (priority order, mutually exclusive)</dt>
+        <dd>1) Converted to Membership -- ever bought a real recurring membership. 2) Converted to Pack -- ever bought a 5+ credit/class pack (checked only if not a membership conversion). 3) Tried Another Intro Offer -- bought the OTHER intro offer without ever converting. 4) Casual Re-engagement Only -- bought something again (drop-ins, small packs) but never converted or hopped. 5) No Further Purchase -- nothing bought since.</dd>
+
+        <dt>Converted within 7/30/90 days</dt>
+        <dd>Cumulative % of CONVERTERS (not all starters) who converted within that many days of their own intro offer starting -- not a calendar date. Chosen over a single raw "median days" figure since a normalized rate is easier to compare across different time periods and between the two intro offer types.</dd>
+      </dl>
+      <dl>
+        <dt>Studio filtering</dt>
+        <dd>Only meaningfully applies to "1 Week Unlimited" (a membership, with real purchase-location data). "Welcome 3" is a credit product usable at any studio, so it's always "All Studios" by design -- not a data gap. Picking a specific studio will naturally show 0 Welcome 3 starters, which is expected.</dd>
+
+        <dt>Head-to-head &amp; studio comparison tables</dt>
+        <dd>These deliberately ignore certain page-level toggles so they can always show a real side-by-side comparison: the head-to-head table ignores the intro-type dropdown (it needs both to compare), and the studio table ignores the studio toggle (it always shows Chelsea vs. Marylebone together). Both still respect the timeframe.</dd>
+
+        <dt class="caveat">Caveat: Welcome 3 attendance data is ~95% complete</dt>
+        <dd>Real check-ins are matched via credit_id=2356, which covers the large majority of real Welcome 3 purchases. A small number of edge-case purchases under different internal credit IDs, and any complimentary/comped intro credits, are not included in attendance figures. This was a deliberate scope decision (see conversation history) -- full precision would require tracing each class check-in's specific credit deduction back to its exact original purchase, a meaningfully bigger build for a small accuracy gain.</dd>
+
+        <dt class="caveat">Caveat: "days between visits" is all-time only</dt>
+        <dd>Unlike everything else on this page, average/median days between visits cannot currently be filtered by timeframe/studio -- it's calculated from visit-to-visit gaps, which live at a different level of detail than the per-starter data everything else here recomputes from live.</dd>
+      </dl>
+    </div>
   </div>
 </div>
 
@@ -721,7 +773,7 @@ function toISO(d) { return d.toISOString().slice(0, 10); }
 // pages: ov (Overview), rev (Revenue), ch (Churn & Retention), comp (Composition)
 // ════════════════════════════════════════════════════════════════
 let HISTORY_ROWS = [], LIVE_ROWS = [], AGE_PYRAMID_ROWS = [], CUSTOMER_LOG_ROWS = [], ALL_STUDIOS = [];
-let IO_LIVE_ROWS = [], IO_HISTORY_ROWS = [], IO_FLOW_ROWS = [], IO_ATTENDANCE_ROWS = [], IO_ALL_STUDIOS = [];
+let IO_LIVE_ROWS = [], IO_HISTORY_ROWS = [], IO_FLOW_ROWS = [], IO_ATTENDANCE_ROWS = [], IO_STARTER_ROWS = [], IO_ALL_STUDIOS = [];
 
 const PAGES = {
   ov: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
@@ -1386,66 +1438,156 @@ function renderTenureMix() {
 function renderIntroOffers() {
   const introTypeFilter = document.getElementById('f-intro-type').value;
   const studioFilter = PAGES.io.studio;
+  const { start, end } = getDateBounds('io');
 
-  // KPI cards + histogram + Sankey -- currently by intro type only, not
-  // studio-broken-down yet (see note on page)
-  const liveRow = IO_LIVE_ROWS.find(r => r.intro_type === (introTypeFilter === 'all' ? 'All' : introTypeFilter));
+  // Filter the real per-starter data by date range, studio, and intro type.
+  // Studio only meaningfully applies to 1 Week Unlimited rows -- Welcome 3
+  // rows always have studio="All Studios", so picking a specific studio
+  // naturally excludes them (consistent with how studio-agnostic products
+  // are handled elsewhere on this dashboard).
+  let filtered = IO_STARTER_ROWS.filter(r => r.intro_date >= start && r.intro_date <= end);
+  if (introTypeFilter !== 'all') filtered = filtered.filter(r => r.intro_type === introTypeFilter);
+  if (studioFilter !== 'all') filtered = filtered.filter(r => r.studio === studioFilter);
 
-  if (liveRow) {
-    document.getElementById('io-metrics').innerHTML = `
-      <div class="mc"><div class="ml">Total starters</div><div class="mv">${Number(liveRow.total_starters).toLocaleString()}</div></div>
-      <div class="mc pos"><div class="ml">Converted to membership</div><div class="mv pos-text">${liveRow.converted_membership_pct}%</div><div class="ms">${liveRow.converted_membership_count} people</div></div>
-      <div class="mc"><div class="ml">Converted to credit/class pack</div><div class="mv">${liveRow.converted_pack_pct}%</div><div class="ms">${liveRow.converted_pack_count} people</div></div>
-      <div class="mc neg"><div class="ml">No further purchase</div><div class="mv neg-text">${liveRow.no_further_purchase_pct}%</div><div class="ms">${liveRow.no_further_purchase_count} people</div></div>
-      <div class="mc"><div class="ml">Tried the other intro offer</div><div class="mv">${liveRow.hopped_pct}%</div><div class="ms">${liveRow.hopped_count} people</div></div>
-      <div class="mc"><div class="ml">Median days to convert</div><div class="mv">${liveRow.median_days_to_convert != null ? liveRow.median_days_to_convert : '—'}</div></div>
-    `;
+  const total = filtered.length;
+  const convertedMembership = filtered.filter(r => r.outcome === 'Converted to Membership');
+  const convertedPack = filtered.filter(r => r.outcome === 'Converted to Pack');
+  const hopped = filtered.filter(r => r.outcome === 'Tried Another Intro Offer');
+  const casualOnly = filtered.filter(r => r.outcome === 'Casual Re-engagement Only');
+  const noFurther = filtered.filter(r => r.outcome === 'No Further Purchase');
+  const daysToConvert = convertedMembership.map(r => Number(r.days_to_convert)).filter(d => !isNaN(d));
+  const median = arr => { if (!arr.length) return null; const s = [...arr].sort((a,b)=>a-b); const m = Math.floor(s.length/2); return s.length % 2 ? s[m] : (s[m-1]+s[m])/2; };
+  // Cumulative % of converters who converted within N days -- more
+  // useful than a single raw median for comparing urgency of follow-up
+  const pctWithin = n => daysToConvert.length ? (daysToConvert.filter(d => d <= n).length / daysToConvert.length * 100) : null;
 
-    const bucketLabels = ['0-7 days', '8-30 days', '31-90 days', '90+ days'];
-    const bucketData = [
-      Number(liveRow.convert_days_0_7) || 0,
-      Number(liveRow.convert_days_8_30) || 0,
-      Number(liveRow.convert_days_31_90) || 0,
-      Number(liveRow.convert_days_90plus) || 0,
-    ];
-    mk('chartTimeToConvert', { type: 'bar', data: { labels: bucketLabels, datasets: [{ data: bucketData, backgroundColor: C.teal, borderRadius: 4, borderSkipped: false }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: ysc() } } });
-  }
+  document.getElementById('io-metrics').innerHTML = total === 0 ? `<div class="mc"><div class="ml">No data</div><div class="mv" style="font-size:13px">No intro offer starters in this filter combination.</div></div>` : `
+    <div class="mc"><div class="ml">Total starters</div><div class="mv">${total.toLocaleString()}</div></div>
+    <div class="mc pos"><div class="ml">Converted to membership</div><div class="mv pos-text">${(convertedMembership.length/total*100).toFixed(1)}%</div><div class="ms">${convertedMembership.length} people</div></div>
+    <div class="mc"><div class="ml">Converted to credit/class pack</div><div class="mv">${(convertedPack.length/total*100).toFixed(1)}%</div><div class="ms">${convertedPack.length} people</div></div>
+    <div class="mc neg"><div class="ml">No further purchase</div><div class="mv neg-text">${(noFurther.length/total*100).toFixed(1)}%</div><div class="ms">${noFurther.length} people</div></div>
+    <div class="mc"><div class="ml">Tried the other intro offer</div><div class="mv">${(hopped.length/total*100).toFixed(1)}%</div><div class="ms">${hopped.length} people</div></div>
+    <div class="mc"><div class="ml">Converted within 7 days</div><div class="mv">${pctWithin(7) != null ? pctWithin(7).toFixed(0) + '%' : '—'}</div><div class="ms">of converters</div></div>
+    <div class="mc"><div class="ml">Converted within 30 days</div><div class="mv">${pctWithin(30) != null ? pctWithin(30).toFixed(0) + '%' : '—'}</div><div class="ms">of converters</div></div>
+    <div class="mc"><div class="ml">Converted within 90 days</div><div class="mv">${pctWithin(90) != null ? pctWithin(90).toFixed(0) + '%' : '—'}</div><div class="ms">of converters</div></div>
+  `;
 
-  // Attendance stats + conversion-by-attendance chart. Bucket definitions
+  // Time to convert histogram, recomputed from the filtered set
+  document.getElementById('time-to-convert-sub').textContent =
+    `Of the ${convertedMembership.length.toLocaleString()} client${convertedMembership.length === 1 ? '' : 's'} who started an intro offer in this timeframe and went on to convert to a membership -- however long that took, even beyond the timeframe window. "Timeframe" here filters by when the intro offer STARTED, not when they converted.`;
+
+  const bucketLabels = ['0-7 days', '8-30 days', '31-90 days', '90+ days'];
+  const bucketData = [
+    daysToConvert.filter(d => d >= 0 && d <= 7).length,
+    daysToConvert.filter(d => d >= 8 && d <= 30).length,
+    daysToConvert.filter(d => d >= 31 && d <= 90).length,
+    daysToConvert.filter(d => d > 90).length,
+  ];
+  mk('chartTimeToConvert', { type: 'bar', data: { labels: bucketLabels, datasets: [{ data: bucketData, backgroundColor: C.teal, borderRadius: 4, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: ysc() } } });
+
+  // Attendance stats + conversion-by-attendance -- bucket definitions
   // differ per intro type (Welcome 3 is a 3-credit pack, 1 Week Unlimited
-  // is unlimited), so when "Both types" is selected, default to showing
-  // 1 Week Unlimited's breakdown (the stronger, cleaner signal).
+  // is unlimited), so when "Both types" is selected, default to 1 Week
+  // Unlimited (the stronger, cleaner signal).
   const attendanceIntroType = introTypeFilter === 'all' ? '1 Week Unlimited' : introTypeFilter;
-  const attendanceLiveRow = IO_LIVE_ROWS.find(r => r.intro_type === attendanceIntroType);
+  const attendanceRows = filtered.filter(r => r.intro_type === attendanceIntroType);
   document.getElementById('attendance-sub').textContent = introTypeFilter === 'all'
-    ? `Real check-in data, joined to lifetime outcomes. Showing 1 Week Unlimited (defaulting from "Both types") -- switch the intro type dropdown above to see Welcome 3 instead.`
-    : `Real check-in data, joined to lifetime outcomes, for ${attendanceIntroType}.`;
+    ? `Real check-in data, for the selected date range/studio. Showing 1 Week Unlimited (defaulting from "Both types") -- switch the intro type dropdown above to see Welcome 3 instead.`
+    : `Real check-in data, for the selected date range/studio, for ${attendanceIntroType}.`;
 
-  if (attendanceLiveRow) {
-    document.getElementById('io-attendance-stats').innerHTML = `
-      <div class="mc"><div class="ml">Avg classes attended</div><div class="mv">${attendanceLiveRow.avg_classes_attended != null ? attendanceLiveRow.avg_classes_attended : '—'}</div></div>
-      <div class="mc"><div class="ml">Median classes attended</div><div class="mv">${attendanceLiveRow.median_classes_attended != null ? attendanceLiveRow.median_classes_attended : '—'}</div></div>
-      <div class="mc"><div class="ml">Avg days between visits</div><div class="mv">${attendanceLiveRow.avg_days_between_visits != null ? attendanceLiveRow.avg_days_between_visits : '—'}</div></div>
-      <div class="mc"><div class="ml">Median days between visits</div><div class="mv">${attendanceLiveRow.median_days_between_visits != null ? attendanceLiveRow.median_days_between_visits : '—'}</div></div>
-    `;
-  }
+  const classesAttendedArr = attendanceRows.map(r => Number(r.classes_attended) || 0);
+  const avgClasses = classesAttendedArr.length ? (classesAttendedArr.reduce((a,b)=>a+b,0)/classesAttendedArr.length) : null;
+  document.getElementById('io-attendance-stats').innerHTML = `
+    <div class="mc"><div class="ml">Avg classes attended</div><div class="mv">${avgClasses != null ? avgClasses.toFixed(2) : '—'}</div></div>
+    <div class="mc"><div class="ml">Median classes attended</div><div class="mv">${median(classesAttendedArr) != null ? median(classesAttendedArr) : '—'}</div></div>
+    <div class="mc"><div class="ml">Avg days between visits</div><div class="mv" style="font-size:14px;color:var(--text3)">All-time only*</div></div>
+    <div class="mc"><div class="ml">Median days between visits</div><div class="mv" style="font-size:14px;color:var(--text3)">All-time only*</div></div>
+  `;
 
-  const attendanceRows = IO_ATTENDANCE_ROWS.filter(r => r.intro_type === attendanceIntroType);
-  // Keep buckets in a sensible order rather than alphabetical
-  const bucketOrder = ['0 (never attended)', '1', '1-2', '2', '3', '3-4', '3 (used it all)', '4+', '5-6', '7+'];
-  attendanceRows.sort((a, b) => bucketOrder.indexOf(a.attendance_bucket) - bucketOrder.indexOf(b.attendance_bucket));
+  function bucketOneWeek(n) { if (n === 0) return "0 (never attended)"; if (n <= 2) return "1-2"; if (n <= 4) return "3-4"; if (n <= 6) return "5-6"; return "7+"; }
+  function bucketWelcome3(n) { if (n === 0) return "0 (never attended)"; if (n === 1) return "1"; if (n === 2) return "2"; if (n === 3) return "3 (used it all)"; return "4+"; }
+  const bucketFn = attendanceIntroType === 'Welcome 3' ? bucketWelcome3 : bucketOneWeek;
+  const bucketOrder = attendanceIntroType === 'Welcome 3' ? ['0 (never attended)','1','2','3 (used it all)','4+'] : ['0 (never attended)','1-2','3-4','5-6','7+'];
+
+  const bucketGroups = new Map();
+  attendanceRows.forEach(r => {
+    const b = bucketFn(Number(r.classes_attended) || 0);
+    if (!bucketGroups.has(b)) bucketGroups.set(b, { total: 0, converted: 0 });
+    const g = bucketGroups.get(b);
+    g.total++;
+    if (r.outcome === 'Converted to Membership') g.converted++;
+  });
+  const attendanceChartRows = bucketOrder.filter(b => bucketGroups.has(b)).map(b => {
+    const g = bucketGroups.get(b);
+    return { bucket: b, count: g.total, conversion_pct: g.total > 0 ? (g.converted / g.total * 100) : 0 };
+  });
 
   mk('chartAttendanceConversion', { type: 'bar', data: {
-    labels: attendanceRows.map(r => `${r.attendance_bucket} (n=${r.count})`),
-    datasets: [{ data: attendanceRows.map(r => Number(r.conversion_pct) || 0), backgroundColor: C.enmei, borderRadius: 4, borderSkipped: false }],
+    labels: attendanceChartRows.map(r => `${r.bucket} (n=${r.count})`),
+    datasets: [{ data: attendanceChartRows.map(r => Math.round(r.conversion_pct * 10) / 10), backgroundColor: C.enmei, borderRadius: 4, borderSkipped: false }],
   }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false },
     tooltip: { callbacks: { label: ctx => `Conversion: ${ctx.parsed.y}%` } } },
     scales: { x: xsc(), y: { ...ysc(), ticks: { ...ysc().ticks, callback: v => v + '%' } } } } });
 
-  // Sankey: first purchase type -> lifetime outcome
-  const flowFiltered = introTypeFilter === 'all' ? IO_FLOW_ROWS : IO_FLOW_ROWS.filter(r => r.intro_type === introTypeFilter);
-  const sankeyData = flowFiltered.map(r => ({ from: r.intro_type, to: r.outcome, flow: Number(r.count) || 0 })).filter(d => d.flow > 0);
+  // ── Head-to-head + studio comparison tables. Both always respect date
+  // range, but deliberately ignore certain toggles so they can show a
+  // real side-by-side comparison regardless of what's currently selected
+  // for the rest of the page. ──
+  const dateFilteredOnly = IO_STARTER_ROWS.filter(r => r.intro_date >= start && r.intro_date <= end);
+
+  function computeOutcomeStats(rows) {
+    const total = rows.length;
+    if (total === 0) return null;
+    const convMem = rows.filter(r => r.outcome === 'Converted to Membership');
+    const convPack = rows.filter(r => r.outcome === 'Converted to Pack');
+    const hop = rows.filter(r => r.outcome === 'Tried Another Intro Offer');
+    const cas = rows.filter(r => r.outcome === 'Casual Re-engagement Only');
+    const noF = rows.filter(r => r.outcome === 'No Further Purchase');
+    const days = convMem.map(r => Number(r.days_to_convert)).filter(d => !isNaN(d));
+    const within30 = days.length ? (days.filter(d => d <= 30).length / days.length * 100) : null;
+    return {
+      total, convMemPct: convMem.length / total * 100, convPackPct: convPack.length / total * 100,
+      hopPct: hop.length / total * 100, casPct: cas.length / total * 100, noFPct: noF.length / total * 100,
+      within30,
+    };
+  }
+
+  function renderComparisonRow(label, stats) {
+    if (!stats) return `<tr><td>${label}</td><td colspan="7" class="empty-state">No data</td></tr>`;
+    return `<tr>
+      <td>${label}</td><td>${stats.total.toLocaleString()}</td>
+      <td class="pos-text">${stats.convMemPct.toFixed(1)}%</td><td>${stats.convPackPct.toFixed(1)}%</td>
+      <td>${stats.hopPct.toFixed(1)}%</td><td>${stats.casPct.toFixed(1)}%</td>
+      <td class="neg-text">${stats.noFPct.toFixed(1)}%</td>
+      <td>${stats.within30 != null ? stats.within30.toFixed(0) + '%' : '—'}</td>
+    </tr>`;
+  }
+
+  // Head-to-head: ignores the intro-type dropdown (needs both to compare), respects studio + date range
+  const oneWeekStats = computeOutcomeStats((studioFilter === 'all' ? dateFilteredOnly : dateFilteredOnly.filter(r => r.studio === studioFilter)).filter(r => r.intro_type === '1 Week Unlimited'));
+  const welcome3Stats = computeOutcomeStats(dateFilteredOnly.filter(r => r.intro_type === 'Welcome 3'));
+  document.getElementById('io-headtohead-body').innerHTML =
+    renderComparisonRow('1 Week Unlimited', oneWeekStats) + renderComparisonRow('Welcome 3', welcome3Stats);
+
+  // Studio breakdown: always 1 Week Unlimited only, ignores studio toggle, respects date range
+  const oneWeekOnly = dateFilteredOnly.filter(r => r.intro_type === '1 Week Unlimited');
+  const chelseaStats = computeOutcomeStats(oneWeekOnly.filter(r => r.studio === 'Chelsea'));
+  const maryStats = computeOutcomeStats(oneWeekOnly.filter(r => r.studio === 'Marylebone'));
+  document.getElementById('io-studio-body').innerHTML =
+    renderComparisonRow('Chelsea', chelseaStats) + renderComparisonRow('Marylebone', maryStats);
+
+  // Sankey: first purchase type -> lifetime outcome, recomputed from the filtered set
+  const flowGroups = new Map();
+  filtered.forEach(r => {
+    const key = `${r.intro_type}|${r.outcome}`;
+    flowGroups.set(key, (flowGroups.get(key) || 0) + 1);
+  });
+  const sankeyData = Array.from(flowGroups.entries()).map(([key, count]) => {
+    const [from, to] = key.split('|');
+    return { from, to, flow: count };
+  }).filter(d => d.flow > 0);
+
   const nodeColors = {
     'Welcome 3': C.enmei, '1 Week Unlimited': C.slate,
     'Converted to Membership': C.teal, 'Converted to Pack': '#7dd3c0',
@@ -1465,10 +1607,14 @@ function renderIntroOffers() {
       }] },
       options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
     });
+  } else if (charts.chartIntroSankey) {
+    charts.chartIntroSankey.destroy();
+    delete charts.chartIntroSankey;
   }
 
-  // Trend: starters + conversions per week, filtered by studio/intro type/timeframe
-  const { start, end } = getDateBounds('io');
+  // Trend: starters + conversions per week -- still sourced from the
+  // pre-aggregated weekly History tab (efficient, and already correctly
+  // scoped by date/studio/type)
   let historyFiltered = IO_HISTORY_ROWS.filter(r => r.week >= start && r.week <= end);
   if (introTypeFilter !== 'all') historyFiltered = historyFiltered.filter(r => r.intro_type === introTypeFilter);
   if (studioFilter !== 'all') historyFiltered = historyFiltered.filter(r => r.studio === studioFilter);
@@ -1506,14 +1652,15 @@ async function init() {
 
     // Intro Offers tabs -- fetched separately with allSettled so a
     // problem here doesn't take down the rest of the dashboard
-    const [ioLiveResult, ioHistoryResult, ioFlowResult, ioAttendanceResult] = await Promise.allSettled([
+    const [ioLiveResult, ioHistoryResult, ioFlowResult, ioAttendanceResult, ioStarterResult] = await Promise.allSettled([
       fetchSheet('IntroOffers_Live'), fetchSheet('IntroOffers_History'), fetchSheet('IntroOffers_Flow'),
-      fetchSheet('IntroOffers_Attendance'),
+      fetchSheet('IntroOffers_Attendance'), fetchSheet('IntroOffers_Starters'),
     ]);
     IO_LIVE_ROWS = ioLiveResult.status === 'fulfilled' ? parseGvizTable(ioLiveResult.value) : [];
     IO_HISTORY_ROWS = ioHistoryResult.status === 'fulfilled' ? parseGvizTable(ioHistoryResult.value) : [];
     IO_FLOW_ROWS = ioFlowResult.status === 'fulfilled' ? parseGvizTable(ioFlowResult.value) : [];
     IO_ATTENDANCE_ROWS = ioAttendanceResult.status === 'fulfilled' ? parseGvizTable(ioAttendanceResult.value) : [];
+    IO_STARTER_ROWS = ioStarterResult.status === 'fulfilled' ? parseGvizTable(ioStarterResult.value) : [];
     if (ioLiveResult.status === 'rejected') console.error('IntroOffers_Live load error:', ioLiveResult.reason);
 
     status.textContent = `Live · ${HISTORY_ROWS.length} history rows · ${LIVE_ROWS.length} current rows`;
