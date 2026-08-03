@@ -9,6 +9,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Enmei — Commercial Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-sankey@0.12.0/dist/chartjs-chart-sankey.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap');
 :root{
@@ -168,9 +169,9 @@ tbody tr:hover td{background:var(--bg3)}
   </div>
 
   <div class="ngroup" id="group-introoffers">
-    <button class="ngroup-head" onclick="toggleGroup('introoffers')"><span class="dot"></span>Intro Offers<span class="chev">▶</span></button>
+    <button class="ngroup-head" onclick="toggleGroup('introoffers')"><span class="dot e"></span>Intro Offers<span class="chev">▶</span></button>
     <div class="ngroup-body">
-      <button class="ni" onclick="goTo('soon',this)">Overview<span class="pill">Soon</span></button>
+      <button class="ni" onclick="goTo('io-overview',this)">Overview</button>
     </div>
   </div>
 
@@ -536,6 +537,63 @@ tbody tr:hover td{background:var(--bg3)}
   </div>
 </div>
 
+<!-- ══════════════════════ INTRO OFFERS ══════════════════════ -->
+<div class="page" id="page-io-overview">
+  <div class="ph"><div>
+    <h1>Intro Offers <em>Overview</em></h1>
+    <div class="ph-sub">Enmei · every first purchase, and what happened next -- including plain drop-ins, not just formal intro offers</div>
+  </div></div>
+
+  <div class="ytabs" id="studio-tabs-io" style="margin-bottom:16px">
+    <button class="ytab active" onclick="setStudio('io','all',this)">All Studios</button>
+  </div>
+  <div class="ccs" style="margin-bottom:16px">Studio filter currently only affects the trend chart below. KPIs, the outcome flow chart, and the time-to-convert histogram are shown across all studios for now -- studio-level breakdowns there may be added later. "Welcome 3" itself is always studio-agnostic (a credit product usable anywhere), not a data gap.</div>
+
+  <div class="ytabs" id="tf-tabs-io" style="margin-bottom:8px">
+    <button class="ytab active" onclick="setTimeframe('io','28d',this)">28D</button>
+    <button class="ytab" onclick="setTimeframe('io','mtd',this)">MTD</button>
+    <button class="ytab" onclick="setTimeframe('io','lastmonth',this)">Last Month</button>
+    <button class="ytab" onclick="setTimeframe('io','ytd',this)">YTD</button>
+    <button class="ytab" onclick="setTimeframe('io','12m',this)">12M</button>
+    <button class="ytab" onclick="setTimeframe('io','alltime',this)">All time</button>
+    <button class="ytab" onclick="showCustomRange('io',this)">Custom</button>
+  </div>
+  <div class="custom-range" id="custom-range-box-io" style="margin-bottom:16px">
+    <input type="date" id="custom-start-io">
+    <span style="color:var(--text3);font-size:12px">to</span>
+    <input type="date" id="custom-end-io">
+    <button onclick="applyCustomRange('io')">Apply</button>
+  </div>
+  <div class="ccs" style="margin-bottom:8px">Timeframe affects the trend chart and the metric cards. The lifetime-outcome Sankey chart always shows all history, since outcomes can take months to resolve.</div>
+
+  <div class="fg" style="margin-bottom:16px">
+    <label for="f-intro-type">Intro offer type</label>
+    <select id="f-intro-type">
+      <option value="all">Both types</option>
+      <option value="1 Week Unlimited">1 Week Unlimited</option>
+      <option value="Welcome 3">Welcome 3</option>
+    </select>
+  </div>
+
+  <div class="mgrid" id="io-metrics"></div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">What happens after an intro offer? (lifetime outcome)</div><div class="ccs">Not just their very next purchase -- tracks forward however long it takes. "Converted" = ever bought a real membership or 5+ credit/class pack, at any point.</div></div></div>
+    <div style="height:320px"><canvas id="chartIntroSankey"></canvas></div>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Does showing up predict conversion?</div><div class="ccs" id="attendance-sub">Real check-in data, joined to lifetime outcomes. If "Both types" is selected above, this defaults to showing 1 Week Unlimited (the stronger, cleaner signal) -- switch the intro type dropdown to see Welcome 3's instead.</div></div></div>
+    <div class="mgrid" id="io-attendance-stats" style="margin-bottom:12px"></div>
+    <div class="h260"><canvas id="chartAttendanceConversion"></canvas></div>
+  </div>
+
+  <div class="cr cr2">
+    <div class="cc"><div class="cch"><div><div class="cct">Time to convert (membership)</div><div class="ccs">Days between the intro offer and the actual membership purchase, for those who converted</div></div></div><div class="h260"><canvas id="chartTimeToConvert"></canvas></div></div>
+    <div class="cc"><div class="cch"><div><div class="cct">Starters &amp; conversions over time</div><div class="ccs">Per week, for the selected filters</div></div></div><div class="h260"><canvas id="chartIntroTrend"></canvas></div></div>
+  </div>
+</div>
+
 <!-- ══════════════════════ SOON ══════════════════════ -->
 <div class="page" id="page-soon">
   <div class="soon-box">
@@ -559,6 +617,7 @@ function goTo(pageName, btn) {
   if (pageName === 'mh-overview') renderOverview();
   if (pageName === 'mh-revenue') renderRevenue();
   if (pageName === 'mh-churn') renderChurn();
+  if (pageName === 'io-overview') renderIntroOffers();
 }
 function toggleGroup(groupName) {
   document.getElementById('group-' + groupName).classList.toggle('open');
@@ -662,11 +721,13 @@ function toISO(d) { return d.toISOString().slice(0, 10); }
 // pages: ov (Overview), rev (Revenue), ch (Churn & Retention), comp (Composition)
 // ════════════════════════════════════════════════════════════════
 let HISTORY_ROWS = [], LIVE_ROWS = [], AGE_PYRAMID_ROWS = [], CUSTOMER_LOG_ROWS = [], ALL_STUDIOS = [];
+let IO_LIVE_ROWS = [], IO_HISTORY_ROWS = [], IO_FLOW_ROWS = [], IO_ATTENDANCE_ROWS = [], IO_ALL_STUDIOS = [];
 
 const PAGES = {
   ov: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
   rev: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
   ch: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
+  io: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
 };
 let COMPARE_MODES = { ov: 'none', ch: 'none' };
 
@@ -722,6 +783,7 @@ function renderPage(page) {
   if (page === 'ov') renderOverview();
   if (page === 'rev') renderRevenue();
   if (page === 'ch') renderChurn();
+  if (page === 'io') renderIntroOffers();
 }
 
 function populateFilters() {
@@ -741,6 +803,19 @@ function populateFilters() {
     tiers.forEach(t => tierSel.insertAdjacentHTML('beforeend', `<option value="${t}">${t}</option>`));
     tierSel.addEventListener('change', () => { PAGES[page].tier = tierSel.value; renderPage(page); });
   });
+
+  // Intro Offers studio tabs -- only real studios that appear for
+  // "1 Week Unlimited" (Welcome 3 is always "All Studios")
+  IO_ALL_STUDIOS = Array.from(new Set(IO_HISTORY_ROWS.map(r => r.studio).filter(s => s && s !== 'All Studios'))).sort();
+  const ioStudioTabs = document.getElementById('studio-tabs-io');
+  IO_ALL_STUDIOS.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'ytab';
+    btn.textContent = s;
+    btn.onclick = () => setStudio('io', s, btn);
+    ioStudioTabs.appendChild(btn);
+  });
+  document.getElementById('f-intro-type').addEventListener('change', renderIntroOffers);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1305,6 +1380,117 @@ function renderTenureMix() {
 // ════════════════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// RENDER: INTRO OFFERS
+// ════════════════════════════════════════════════════════════════
+function renderIntroOffers() {
+  const introTypeFilter = document.getElementById('f-intro-type').value;
+  const studioFilter = PAGES.io.studio;
+
+  // KPI cards + histogram + Sankey -- currently by intro type only, not
+  // studio-broken-down yet (see note on page)
+  const liveRow = IO_LIVE_ROWS.find(r => r.intro_type === (introTypeFilter === 'all' ? 'All' : introTypeFilter));
+
+  if (liveRow) {
+    document.getElementById('io-metrics').innerHTML = `
+      <div class="mc"><div class="ml">Total starters</div><div class="mv">${Number(liveRow.total_starters).toLocaleString()}</div></div>
+      <div class="mc pos"><div class="ml">Converted to membership</div><div class="mv pos-text">${liveRow.converted_membership_pct}%</div><div class="ms">${liveRow.converted_membership_count} people</div></div>
+      <div class="mc"><div class="ml">Converted to credit/class pack</div><div class="mv">${liveRow.converted_pack_pct}%</div><div class="ms">${liveRow.converted_pack_count} people</div></div>
+      <div class="mc neg"><div class="ml">No further purchase</div><div class="mv neg-text">${liveRow.no_further_purchase_pct}%</div><div class="ms">${liveRow.no_further_purchase_count} people</div></div>
+      <div class="mc"><div class="ml">Tried the other intro offer</div><div class="mv">${liveRow.hopped_pct}%</div><div class="ms">${liveRow.hopped_count} people</div></div>
+      <div class="mc"><div class="ml">Median days to convert</div><div class="mv">${liveRow.median_days_to_convert != null ? liveRow.median_days_to_convert : '—'}</div></div>
+    `;
+
+    const bucketLabels = ['0-7 days', '8-30 days', '31-90 days', '90+ days'];
+    const bucketData = [
+      Number(liveRow.convert_days_0_7) || 0,
+      Number(liveRow.convert_days_8_30) || 0,
+      Number(liveRow.convert_days_31_90) || 0,
+      Number(liveRow.convert_days_90plus) || 0,
+    ];
+    mk('chartTimeToConvert', { type: 'bar', data: { labels: bucketLabels, datasets: [{ data: bucketData, backgroundColor: C.teal, borderRadius: 4, borderSkipped: false }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: ysc() } } });
+  }
+
+  // Attendance stats + conversion-by-attendance chart. Bucket definitions
+  // differ per intro type (Welcome 3 is a 3-credit pack, 1 Week Unlimited
+  // is unlimited), so when "Both types" is selected, default to showing
+  // 1 Week Unlimited's breakdown (the stronger, cleaner signal).
+  const attendanceIntroType = introTypeFilter === 'all' ? '1 Week Unlimited' : introTypeFilter;
+  const attendanceLiveRow = IO_LIVE_ROWS.find(r => r.intro_type === attendanceIntroType);
+  document.getElementById('attendance-sub').textContent = introTypeFilter === 'all'
+    ? `Real check-in data, joined to lifetime outcomes. Showing 1 Week Unlimited (defaulting from "Both types") -- switch the intro type dropdown above to see Welcome 3 instead.`
+    : `Real check-in data, joined to lifetime outcomes, for ${attendanceIntroType}.`;
+
+  if (attendanceLiveRow) {
+    document.getElementById('io-attendance-stats').innerHTML = `
+      <div class="mc"><div class="ml">Avg classes attended</div><div class="mv">${attendanceLiveRow.avg_classes_attended != null ? attendanceLiveRow.avg_classes_attended : '—'}</div></div>
+      <div class="mc"><div class="ml">Median classes attended</div><div class="mv">${attendanceLiveRow.median_classes_attended != null ? attendanceLiveRow.median_classes_attended : '—'}</div></div>
+      <div class="mc"><div class="ml">Avg days between visits</div><div class="mv">${attendanceLiveRow.avg_days_between_visits != null ? attendanceLiveRow.avg_days_between_visits : '—'}</div></div>
+      <div class="mc"><div class="ml">Median days between visits</div><div class="mv">${attendanceLiveRow.median_days_between_visits != null ? attendanceLiveRow.median_days_between_visits : '—'}</div></div>
+    `;
+  }
+
+  const attendanceRows = IO_ATTENDANCE_ROWS.filter(r => r.intro_type === attendanceIntroType);
+  // Keep buckets in a sensible order rather than alphabetical
+  const bucketOrder = ['0 (never attended)', '1', '1-2', '2', '3', '3-4', '3 (used it all)', '4+', '5-6', '7+'];
+  attendanceRows.sort((a, b) => bucketOrder.indexOf(a.attendance_bucket) - bucketOrder.indexOf(b.attendance_bucket));
+
+  mk('chartAttendanceConversion', { type: 'bar', data: {
+    labels: attendanceRows.map(r => `${r.attendance_bucket} (n=${r.count})`),
+    datasets: [{ data: attendanceRows.map(r => Number(r.conversion_pct) || 0), backgroundColor: C.enmei, borderRadius: 4, borderSkipped: false }],
+  }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false },
+    tooltip: { callbacks: { label: ctx => `Conversion: ${ctx.parsed.y}%` } } },
+    scales: { x: xsc(), y: { ...ysc(), ticks: { ...ysc().ticks, callback: v => v + '%' } } } } });
+
+  // Sankey: first purchase type -> lifetime outcome
+  const flowFiltered = introTypeFilter === 'all' ? IO_FLOW_ROWS : IO_FLOW_ROWS.filter(r => r.intro_type === introTypeFilter);
+  const sankeyData = flowFiltered.map(r => ({ from: r.intro_type, to: r.outcome, flow: Number(r.count) || 0 })).filter(d => d.flow > 0);
+  const nodeColors = {
+    'Welcome 3': C.enmei, '1 Week Unlimited': C.slate,
+    'Converted to Membership': C.teal, 'Converted to Pack': '#7dd3c0',
+    'Tried Another Intro Offer': '#c9a86a', 'Casual Re-engagement Only': C.text2,
+    'No Further Purchase': C.neg,
+  };
+  if (window.Chart && sankeyData.length > 0) {
+    mk('chartIntroSankey', {
+      type: 'sankey',
+      data: { datasets: [{
+        label: 'Intro Offer Outcomes',
+        data: sankeyData,
+        colorFrom: (ctx) => nodeColors[ctx.dataset.data[ctx.dataIndex].from] || '#888',
+        colorTo: (ctx) => nodeColors[ctx.dataset.data[ctx.dataIndex].to] || '#888',
+        colorMode: 'gradient',
+        borderWidth: 0,
+      }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+    });
+  }
+
+  // Trend: starters + conversions per week, filtered by studio/intro type/timeframe
+  const { start, end } = getDateBounds('io');
+  let historyFiltered = IO_HISTORY_ROWS.filter(r => r.week >= start && r.week <= end);
+  if (introTypeFilter !== 'all') historyFiltered = historyFiltered.filter(r => r.intro_type === introTypeFilter);
+  if (studioFilter !== 'all') historyFiltered = historyFiltered.filter(r => r.studio === studioFilter);
+
+  const trendByWeek = new Map();
+  historyFiltered.forEach(r => {
+    const wk = r.week;
+    if (!trendByWeek.has(wk)) trendByWeek.set(wk, { week: wk, starters: 0, converted_membership: 0, converted_pack: 0 });
+    const e = trendByWeek.get(wk);
+    e.starters += Number(r.starters_count) || 0;
+    e.converted_membership += Number(r.converted_membership_count) || 0;
+    e.converted_pack += Number(r.converted_pack_count) || 0;
+  });
+  const trendSeries = Array.from(trendByWeek.values()).sort((a, b) => a.week.localeCompare(b.week));
+
+  mk('chartIntroTrend', { type: 'line', data: { labels: trendSeries.map(w => w.week), datasets: [
+    { label: 'Starters', data: trendSeries.map(w => w.starters), borderColor: C.slate, backgroundColor: 'rgba(124,147,201,0.08)', fill: false, tension: .3, pointRadius: 2 },
+    { label: 'Converted (membership)', data: trendSeries.map(w => w.converted_membership), borderColor: C.teal, backgroundColor: 'rgba(45,212,191,0.08)', fill: false, tension: .3, pointRadius: 2 },
+    { label: 'Converted (pack)', data: trendSeries.map(w => w.converted_pack), borderColor: C.enmei, backgroundColor: 'rgba(232,68,42,0.08)', fill: false, tension: .3, pointRadius: 2 },
+  ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, labels: { color: C.text2, font: { size: 11 } } } }, scales: { x: xsc(), y: ysc() } } });
+}
+
 async function init() {
   const loading = document.getElementById('loading');
   const status = document.getElementById('sync-status');
@@ -1317,6 +1503,19 @@ async function init() {
     LIVE_ROWS = parseGvizTable(liveTable);
     AGE_PYRAMID_ROWS = parseGvizTable(pyramidTable);
     CUSTOMER_LOG_ROWS = parseGvizTable(logTable);
+
+    // Intro Offers tabs -- fetched separately with allSettled so a
+    // problem here doesn't take down the rest of the dashboard
+    const [ioLiveResult, ioHistoryResult, ioFlowResult, ioAttendanceResult] = await Promise.allSettled([
+      fetchSheet('IntroOffers_Live'), fetchSheet('IntroOffers_History'), fetchSheet('IntroOffers_Flow'),
+      fetchSheet('IntroOffers_Attendance'),
+    ]);
+    IO_LIVE_ROWS = ioLiveResult.status === 'fulfilled' ? parseGvizTable(ioLiveResult.value) : [];
+    IO_HISTORY_ROWS = ioHistoryResult.status === 'fulfilled' ? parseGvizTable(ioHistoryResult.value) : [];
+    IO_FLOW_ROWS = ioFlowResult.status === 'fulfilled' ? parseGvizTable(ioFlowResult.value) : [];
+    IO_ATTENDANCE_ROWS = ioAttendanceResult.status === 'fulfilled' ? parseGvizTable(ioAttendanceResult.value) : [];
+    if (ioLiveResult.status === 'rejected') console.error('IntroOffers_Live load error:', ioLiveResult.reason);
+
     status.textContent = `Live · ${HISTORY_ROWS.length} history rows · ${LIVE_ROWS.length} current rows`;
     status.classList.add('ok');
     loading.classList.add('hidden');
@@ -1326,6 +1525,7 @@ async function init() {
     renderOverview();
     renderRevenue();
     renderChurn();
+    renderIntroOffers();
   } catch (e) {
     console.error('Sheet load error:', e);
     loading.classList.add('hidden');
