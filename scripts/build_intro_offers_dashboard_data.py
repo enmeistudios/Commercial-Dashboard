@@ -82,7 +82,7 @@ from google.oauth2.service_account import Credentials
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import (
     DASHBOARD_SHEET_ID,
-    TAB_INTRO_LIVE, TAB_INTRO_HISTORY, TAB_INTRO_FLOW, TAB_INTRO_ATTENDANCE,
+    TAB_INTRO_LIVE, TAB_INTRO_HISTORY, TAB_INTRO_FLOW, TAB_INTRO_ATTENDANCE, TAB_INTRO_STARTERS,
 )
 
 BASE_URL = os.environ.get("MARIANA_BASE_URL", "https://enmei.marianatek.com/api")
@@ -463,6 +463,27 @@ def build_attendance_breakdown(outcomes_df, one_week_attendance, welcome3_attend
     return pd.DataFrame(rows)
 
 
+def build_starter_log(outcomes_df, one_week_attendance, welcome3_attendance):
+    """One row per intro offer starter -- ID-only (no names/emails), so
+    the dashboard can filter by date range/studio/intro type and
+    recompute every KPI, the Sankey, the histogram, and the attendance
+    breakdown live, client-side. Same principle as Membership Health's
+    Customer Log: user_id alone is meaningless without Mariana Tek
+    account access."""
+    df = outcomes_df.copy()
+    df["user_id"] = df["user_id"].astype(str)
+
+    attendance_lookup = {}
+    for attendance_df in [one_week_attendance, welcome3_attendance]:
+        for _, row in attendance_df.iterrows():
+            attendance_lookup[row["user_id"]] = row["classes_attended"]
+
+    df["classes_attended"] = df["user_id"].map(attendance_lookup).fillna(0).astype(int)
+    df["intro_date"] = df["intro_date"].astype(str)
+
+    return df[["user_id", "intro_type", "intro_date", "intro_studio", "outcome", "days_to_convert", "classes_attended"]]
+
+
 def build_flow(outcomes_df):
     """First-purchase-category -> outcome counts, for the flow/Sankey chart."""
     flow = outcomes_df.groupby(["intro_type", "outcome"]).size().reset_index(name="count")
@@ -525,6 +546,8 @@ def main():
     history_df = build_history(outcomes_df, all_events)
     flow_df = build_flow(outcomes_df)
     attendance_breakdown_df = build_attendance_breakdown(outcomes_df, one_week_attendance, welcome3_attendance)
+    customer_log_df = build_starter_log(outcomes_df, one_week_attendance, welcome3_attendance)
+    print(f"\nStarter log: {len(customer_log_df)} rows")
 
     if os.environ.get("DEBUG_ONLY_SKIP_SHEET_WRITE") == "true":
         print("\nDEBUG_ONLY_SKIP_SHEET_WRITE is set -- skipping the actual write.")
@@ -536,12 +559,15 @@ def main():
         print(flow_df.to_string())
         print("\n--- Attendance breakdown ---")
         print(attendance_breakdown_df.to_string())
+        print("\n--- Starter log (head) ---")
+        print(customer_log_df.head(20).to_string())
         return
 
     write_to_sheet(live_kpis_df, TAB_INTRO_LIVE)
     write_to_sheet(history_df, TAB_INTRO_HISTORY)
     write_to_sheet(flow_df, TAB_INTRO_FLOW)
     write_to_sheet(attendance_breakdown_df, TAB_INTRO_ATTENDANCE)
+    write_to_sheet(customer_log_df, TAB_INTRO_STARTERS)
 
 
 if __name__ == "__main__":
