@@ -29,3 +29,8 @@ TAB_HISTORY = "Membership_History"
 TAB_CUSTOMER_LOG = "Membership_Customer_Log"
 TAB_AGE_PYRAMID = "Membership_Age_Pyramid"
 
+TAB_INTRO_LIVE = "IntroOffers_Live"
+TAB_INTRO_HISTORY = "IntroOffers_History"
+TAB_INTRO_FLOW = "IntroOffers_Flow"
+TAB_INTRO_ATTENDANCE = "IntroOffers_Attendance"
+
