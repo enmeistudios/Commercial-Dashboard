@@ -481,7 +481,8 @@ def build_starter_log(outcomes_df, one_week_attendance, welcome3_attendance):
     df["classes_attended"] = df["user_id"].map(attendance_lookup).fillna(0).astype(int)
     df["intro_date"] = df["intro_date"].astype(str)
 
-    return df[["user_id", "intro_type", "intro_date", "intro_studio", "outcome", "days_to_convert", "classes_attended"]]
+    df = df.rename(columns={"intro_studio": "studio"})
+    return df[["user_id", "intro_type", "intro_date", "studio", "outcome", "days_to_convert", "classes_attended"]]
 
 
 def build_flow(outcomes_df):
