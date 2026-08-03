@@ -33,4 +33,5 @@ TAB_INTRO_LIVE = "IntroOffers_Live"
 TAB_INTRO_HISTORY = "IntroOffers_History"
 TAB_INTRO_FLOW = "IntroOffers_Flow"
 TAB_INTRO_ATTENDANCE = "IntroOffers_Attendance"
+TAB_INTRO_STARTERS = "IntroOffers_Starters"
 
