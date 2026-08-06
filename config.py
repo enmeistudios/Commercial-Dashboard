@@ -35,6 +35,18 @@ TAB_INTRO_FLOW = "IntroOffers_Flow"
 TAB_INTRO_ATTENDANCE = "IntroOffers_Attendance"
 TAB_INTRO_STARTERS = "IntroOffers_Starters"
 TAB_INTRO_EXPIRING = "IntroOffers_Expiring"
+
 TAB_SUMMER_STRONG_PERFORMANCE = "SummerStrong_Performance"
 TAB_SUMMER_STRONG_EXPIRING = "SummerStrong_Expiring"
+
+# Class Performance -- see build_class_performance_dashboard_data.py.
+# TAB_CLASS_SESSIONS is the granular ID-only per-class-session log (mirrors
+# the IntroOffers_Starters pattern: full rows, all filtering done
+# client-side in the dashboard so studio/timeframe/coach toggles all work
+# off one table). TAB_CLASS_HISTORY is a weekly rollup for trend charts.
+# TAB_COACH_SCORECARD is one row per coach x studio x rolling window.
+TAB_CLASS_SESSIONS = "ClassPerformance_Sessions"
+TAB_CLASS_HISTORY = "ClassPerformance_History"
+TAB_COACH_SCORECARD = "ClassPerformance_CoachScorecard"
+TAB_CLASS_CANCELLATIONS = "ClassPerformance_Cancellations"
 
