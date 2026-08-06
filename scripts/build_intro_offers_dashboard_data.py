@@ -94,7 +94,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import (
     DASHBOARD_SHEET_ID,
     TAB_INTRO_LIVE, TAB_INTRO_HISTORY, TAB_INTRO_FLOW, TAB_INTRO_ATTENDANCE, TAB_INTRO_STARTERS,
-    TAB_INTRO_EXPIRING,
+    TAB_INTRO_EXPIRING, TAB_SUMMER_STRONG_PERFORMANCE, TAB_SUMMER_STRONG_EXPIRING,
 )
 
 BASE_URL = os.environ.get("MARIANA_BASE_URL", "https://enmei.marianatek.com/api")
@@ -622,6 +622,83 @@ def build_expiring_summary():
     return summary
 
 
+def build_summer_strong_analysis(all_events):
+    """Standalone, lightweight tracking for the Summer Strong promo (2
+    weeks unlimited, £150) -- a temporary campaign, deliberately kept
+    SEPARATE from the main 1 Week Unlimited/Welcome 3 system rather than
+    integrated as a permanent third intro type. Reuses all_events (no
+    extra API pull needed) since it's a real membership purchase, same
+    as any other.
+
+    ASSUMPTION (not validated against real commitment_length data --
+    built directly per instruction, debug later if this looks wrong):
+    expiration = start date + 14 days. Summer Strong is a fixed 2-week
+    product, not a renewing 6-month commitment, so commitment_length
+    (which the rest of this codebase treats as a count of MONTHS) may
+    not cleanly represent "2 weeks" -- hardcoding 14 days is more
+    transparent and easier to correct later than trusting an unvalidated
+    field."""
+    ss = all_events[all_events["product_name"].str.lower() == "summer strong"].copy()
+    if len(ss) == 0:
+        empty_perf = pd.DataFrame(columns=["studio", "outcome", "count"])
+        empty_exp = pd.DataFrame(columns=["studio", "tag", "count", "avg_days_until_expiration"])
+        return empty_perf, empty_exp
+
+    today = pd.Timestamp.now(tz="utc")
+    results = []
+    for _, row in ss.iterrows():
+        uid, rank, start, studio = row["user_id"], row["purchase_rank"], row["event_date"], row["studio"]
+        subsequent = all_events[(all_events["user_id"] == uid) & (all_events["purchase_rank"] > rank)]
+
+        ever_real_membership = subsequent[
+            (subsequent["purchase_category"] == "membership") & (subsequent["product_name"].str.lower() != "summer strong")
+        ]
+        ever_pack = subsequent[subsequent["purchase_category"] == "pack_5plus"]
+        ever_repeated_ss = subsequent[subsequent["product_name"].str.lower() == "summer strong"]
+
+        days_since_start = (today - start).days
+        if len(ever_real_membership) > 0:
+            outcome = "Converted to Membership"
+        elif len(ever_pack) > 0:
+            outcome = "Converted to Pack"
+        elif len(ever_repeated_ss) > 0:
+            outcome = "Repeated Summer Strong"
+        elif len(subsequent) > 0:
+            outcome = "Casual Re-engagement Only"
+        elif days_since_start < 30:
+            outcome = "Pending (recent, no outcome yet)"
+        else:
+            outcome = "No Further Purchase"
+
+        expiration = start + pd.Timedelta(days=14)
+        days_until_expiration = (expiration - today).days
+        if days_until_expiration < 0:
+            tag = "expired" if days_until_expiration >= -30 else None
+        elif days_until_expiration <= 3:
+            tag = "expiring_soon"
+        else:
+            tag = None
+
+        results.append({
+            "studio": studio or "Unknown", "outcome": outcome,
+            "tag": tag, "days_until_expiration": days_until_expiration,
+        })
+
+    detail_df = pd.DataFrame(results)
+    performance_df = detail_df.groupby(["studio", "outcome"]).size().reset_index(name="count")
+
+    tagged = detail_df[detail_df["tag"].notna()]
+    if len(tagged) > 0:
+        expiring_df = tagged.groupby(["studio", "tag"]).agg(
+            count=("tag", "size"), avg_days_until_expiration=("days_until_expiration", "mean")
+        ).reset_index()
+        expiring_df["avg_days_until_expiration"] = expiring_df["avg_days_until_expiration"].round(1)
+    else:
+        expiring_df = pd.DataFrame(columns=["studio", "tag", "count", "avg_days_until_expiration"])
+
+    return performance_df, expiring_df
+
+
 def build_flow(outcomes_df):
     """First-purchase-category -> outcome counts, for the flow/Sankey chart."""
     flow = outcomes_df.groupby(["intro_type", "outcome"]).size().reset_index(name="count")
@@ -691,6 +768,11 @@ def main():
     expiring_df = build_expiring_summary()
     print(f"Expiring summary: {len(expiring_df)} rows")
 
+    print("\nBuilding Summer Strong analysis (standalone, aggregate, no PII)...")
+    summer_strong_performance_df, summer_strong_expiring_df = build_summer_strong_analysis(all_events)
+    print(f"Summer Strong performance: {len(summer_strong_performance_df)} rows")
+    print(f"Summer Strong expiring: {len(summer_strong_expiring_df)} rows")
+
     if os.environ.get("DEBUG_ONLY_SKIP_SHEET_WRITE") == "true":
         print("\nDEBUG_ONLY_SKIP_SHEET_WRITE is set -- skipping the actual write.")
         print("\n--- Live KPIs ---")
@@ -705,6 +787,10 @@ def main():
         print(customer_log_df.head(20).to_string())
         print("\n--- Expiring summary ---")
         print(expiring_df.to_string())
+        print("\n--- Summer Strong performance ---")
+        print(summer_strong_performance_df.to_string())
+        print("\n--- Summer Strong expiring ---")
+        print(summer_strong_expiring_df.to_string())
         return
 
     write_to_sheet(live_kpis_df, TAB_INTRO_LIVE)
@@ -713,6 +799,8 @@ def main():
     write_to_sheet(attendance_breakdown_df, TAB_INTRO_ATTENDANCE)
     write_to_sheet(customer_log_df, TAB_INTRO_STARTERS)
     write_to_sheet(expiring_df, TAB_INTRO_EXPIRING)
+    write_to_sheet(summer_strong_performance_df, TAB_SUMMER_STRONG_PERFORMANCE)
+    write_to_sheet(summer_strong_expiring_df, TAB_SUMMER_STRONG_EXPIRING)
 
 
 if __name__ == "__main__":
