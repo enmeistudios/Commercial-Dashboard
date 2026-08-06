@@ -234,7 +234,7 @@ def clean_sessions_df(raw_df):
 
     # Defensive multi-instructor split (not observed in validation, but
     # the underlying API field is a list, so guard against it anyway).
-    df["Instructors"] = df["Instructors"].astype(str).replace("nan", "")
+    df["Instructors"] = df["Instructors"].fillna("").astype(str)
     df["Instructor_List"] = df["Instructors"].apply(
         lambda s: [n.strip() for n in s.split(",") if n.strip()] if s else []
     )
