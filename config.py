@@ -35,4 +35,6 @@ TAB_INTRO_FLOW = "IntroOffers_Flow"
 TAB_INTRO_ATTENDANCE = "IntroOffers_Attendance"
 TAB_INTRO_STARTERS = "IntroOffers_Starters"
 TAB_INTRO_EXPIRING = "IntroOffers_Expiring"
+TAB_SUMMER_STRONG_PERFORMANCE = "SummerStrong_Performance"
+TAB_SUMMER_STRONG_EXPIRING = "SummerStrong_Expiring"
 
