@@ -464,6 +464,18 @@ def main():
     # data-quality flag visible.
     sessions_export = sessions_df.drop(columns=["Instructor_List"]).copy()
 
+    if os.environ.get("DEBUG_ONLY_SKIP_SHEET_WRITE") == "true":
+        print("\nDEBUG_ONLY_SKIP_SHEET_WRITE is set -- skipping the actual write.")
+        print("\n--- Sessions (head) ---")
+        print(sessions_export.head(20).to_string())
+        print("\n--- History ---")
+        print(history_df.to_string())
+        print("\n--- Coach Scorecard ---")
+        print(scorecard_df.to_string())
+        print("\n--- Cancellations ---")
+        print(cancellations_df.to_string())
+        return
+
     write_to_sheet(sessions_export, TAB_CLASS_SESSIONS)
     write_to_sheet(history_df, TAB_CLASS_HISTORY)
     write_to_sheet(scorecard_df, TAB_COACH_SCORECARD)
