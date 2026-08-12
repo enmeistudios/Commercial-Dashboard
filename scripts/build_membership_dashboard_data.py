@@ -36,6 +36,17 @@ Exclusions (confirmed with the business, applied everywhere):
     this membership type as an intro offer (confirmed by inspecting real
     data) -- so we exclude it by NAME, not by that flag.
   - "Recovery" (Compression Boots) -- a client perk, not a sold membership.
+  - "Summer Strong" -- a fixed 2-week promo (~4 weeks/year availability),
+    not a recurring membership commitment. Confirmed with Remy: counting
+    it as a normal membership would create a guaranteed "cancellation"
+    for every single signup exactly 2 weeks later (100% of the time, by
+    design), which would inflate churn rate and pollute cancellation-
+    reason stats with an event that has nothing to do with real
+    dissatisfaction. It would also produce a temporary spike-then-crash
+    in active members/MRR that misrepresents the health of the actual
+    recurring membership base. Tracked instead as a third intro-offer
+    product (see build_intro_offers_dashboard_data.py's Summer Strong
+    section) -- same treatment as 1 Week Unlimited, for the same reason.
 
 Tier classification: keyword-based, confirmed against the real
 membership_name values in this table (see classify_tier below).
@@ -68,12 +79,16 @@ HEADERS = {"Authorization": f"Bearer {os.environ['MARIANA_API_KEY']}"}
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # Membership types that are NOT real memberships -- excluded everywhere.
-EXCLUDED_NAME_KEYWORDS = ["1 week unlimited", "recovery"]
+EXCLUDED_NAME_KEYWORDS = ["1 week unlimited", "recovery", "summer strong"]
 
 # Exact-name matches (lowercase) for the short-term/promo Unlimited tier.
+# NOTE: "summer strong" deliberately NOT included here -- it's excluded
+# entirely above, before classification ever runs, so it never reaches
+# this set. Left out rather than left in as dead code, to avoid a future
+# reader wondering why it's classified into a tier it's never actually
+# retained for.
 PROMO_UNLIMITED_NAMES = {
     "2 week unlimited", "one month unlimited", "spring sale - unlimited monthly",
-    "summer strong",
 }
 
 
