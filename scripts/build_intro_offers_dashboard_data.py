@@ -95,6 +95,7 @@ from config import (
     DASHBOARD_SHEET_ID,
     TAB_INTRO_LIVE, TAB_INTRO_HISTORY, TAB_INTRO_FLOW, TAB_INTRO_ATTENDANCE, TAB_INTRO_STARTERS,
     TAB_INTRO_EXPIRING, TAB_SUMMER_STRONG_PERFORMANCE, TAB_SUMMER_STRONG_EXPIRING,
+    TAB_SUMMER_STRONG_EXPIRING_DETAIL,
 )
 
 BASE_URL = os.environ.get("MARIANA_BASE_URL", "https://enmei.marianatek.com/api")
@@ -642,7 +643,8 @@ def build_summer_strong_analysis(all_events):
     if len(ss) == 0:
         empty_perf = pd.DataFrame(columns=["studio", "outcome", "count"])
         empty_exp = pd.DataFrame(columns=["studio", "tag", "count", "avg_days_until_expiration"])
-        return empty_perf, empty_exp
+        empty_exp_detail = pd.DataFrame(columns=["customer_id", "studio", "tag", "start_date", "expiration_date", "days_until_expiration"])
+        return empty_perf, empty_exp, empty_exp_detail
 
     today = pd.Timestamp.now(tz="utc")
     results = []
@@ -682,6 +684,7 @@ def build_summer_strong_analysis(all_events):
         results.append({
             "studio": studio or "Unknown", "outcome": outcome,
             "tag": tag, "days_until_expiration": days_until_expiration,
+            "customer_id": uid, "start_date": start, "expiration_date": expiration,
         })
 
     detail_df = pd.DataFrame(results)
@@ -693,10 +696,19 @@ def build_summer_strong_analysis(all_events):
             count=("tag", "size"), avg_days_until_expiration=("days_until_expiration", "mean")
         ).reset_index()
         expiring_df["avg_days_until_expiration"] = expiring_df["avg_days_until_expiration"].round(1)
+        # Per-customer detail for actual outreach -- ID-only, no names,
+        # same convention as Membership_Customer_Log and the At Risk/Term
+        # Ending list. Unlike the main 1 Week Unlimited/Welcome 3 expiring
+        # widget (deliberately aggregate-only, since a real Slack
+        # automation already sends the client list for those), Summer
+        # Strong has no such automation -- this IS the actionable list.
+        expiring_detail_df = tagged[["customer_id", "studio", "tag", "start_date", "expiration_date", "days_until_expiration"]].copy()
+        expiring_detail_df = expiring_detail_df.sort_values("days_until_expiration")
     else:
         expiring_df = pd.DataFrame(columns=["studio", "tag", "count", "avg_days_until_expiration"])
+        expiring_detail_df = pd.DataFrame(columns=["customer_id", "studio", "tag", "start_date", "expiration_date", "days_until_expiration"])
 
-    return performance_df, expiring_df
+    return performance_df, expiring_df, expiring_detail_df
 
 
 def build_flow(outcomes_df):
@@ -768,10 +780,11 @@ def main():
     expiring_df = build_expiring_summary()
     print(f"Expiring summary: {len(expiring_df)} rows")
 
-    print("\nBuilding Summer Strong analysis (standalone, aggregate, no PII)...")
-    summer_strong_performance_df, summer_strong_expiring_df = build_summer_strong_analysis(all_events)
+    print("\nBuilding Summer Strong analysis (standalone; aggregate performance + expiring detail, IDs only, no PII)...")
+    summer_strong_performance_df, summer_strong_expiring_df, summer_strong_expiring_detail_df = build_summer_strong_analysis(all_events)
     print(f"Summer Strong performance: {len(summer_strong_performance_df)} rows")
-    print(f"Summer Strong expiring: {len(summer_strong_expiring_df)} rows")
+    print(f"Summer Strong expiring (aggregate): {len(summer_strong_expiring_df)} rows")
+    print(f"Summer Strong expiring (per-customer detail): {len(summer_strong_expiring_detail_df)} rows")
 
     if os.environ.get("DEBUG_ONLY_SKIP_SHEET_WRITE") == "true":
         print("\nDEBUG_ONLY_SKIP_SHEET_WRITE is set -- skipping the actual write.")
@@ -789,8 +802,10 @@ def main():
         print(expiring_df.to_string())
         print("\n--- Summer Strong performance ---")
         print(summer_strong_performance_df.to_string())
-        print("\n--- Summer Strong expiring ---")
+        print("\n--- Summer Strong expiring (aggregate) ---")
         print(summer_strong_expiring_df.to_string())
+        print("\n--- Summer Strong expiring (per-customer detail) ---")
+        print(summer_strong_expiring_detail_df.to_string())
         return
 
     write_to_sheet(live_kpis_df, TAB_INTRO_LIVE)
@@ -801,6 +816,7 @@ def main():
     write_to_sheet(expiring_df, TAB_INTRO_EXPIRING)
     write_to_sheet(summer_strong_performance_df, TAB_SUMMER_STRONG_PERFORMANCE)
     write_to_sheet(summer_strong_expiring_df, TAB_SUMMER_STRONG_EXPIRING)
+    write_to_sheet(summer_strong_expiring_detail_df, TAB_SUMMER_STRONG_EXPIRING_DETAIL)
 
 
 if __name__ == "__main__":
