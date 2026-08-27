@@ -1,0 +1,2762 @@
+<!-- ============================================================
+     PASTE YOUR GOOGLE SHEET ID ON THE LINE BELOW (between the quotes)
+     ============================================================ -->
+<script>const SHEET_ID = '1Nq5xLYTw9Bx_aGXrZbAExp1h32fLwMBE6037LIHn-Gc';</script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enmei — Commercial Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-sankey@0.12.0/dist/chartjs-chart-sankey.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap');
+:root{
+  --bg:#0d0d0f;--bg2:#141416;--bg3:#1c1c20;--bg4:#242428;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.14);
+  --text:#f0ede8;--text2:#9b9690;--text3:#5a5752;
+  --enmei:#e8442a;--enmei-dim:rgba(232,68,42,0.14);
+  --teal:#2dd4bf;--teal-bg:rgba(45,212,191,0.13);
+  --slate:#7c93c9;--slate-bg:rgba(124,147,201,0.13);
+  --neg:#e0625a;--neg-bg:rgba(224,98,90,0.13);
+  --radius:10px;--radius-lg:16px;
+  --grid:rgba(255,255,255,0.05);
+  --sans:'Inter',system-ui,sans-serif;
+  --serif:'DM Serif Display',Georgia,serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+
+.layout{display:flex;height:100vh;overflow:hidden}
+nav{width:230px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0}
+main{flex:1;overflow-y:auto;padding:28px 32px}
+
+.nav-logo{padding:20px 18px 16px;border-bottom:1px solid var(--border)}
+.nav-logo .wm{font-family:var(--serif);font-size:17px;color:var(--enmei)}
+.nav-logo .ws{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.09em;margin-top:2px}
+.ni{display:flex;align-items:center;gap:9px;padding:7px 11px;margin:1px 7px;border-radius:8px;cursor:pointer;font-size:12.5px;color:var(--text2);border:none;background:none;width:calc(100% - 14px);text-align:left;transition:background .12s,color .12s}
+.ni:hover{background:var(--bg3);color:var(--text)}
+.ni.active{background:var(--enmei-dim);color:var(--text)}
+.ni .pill{margin-left:auto;font-size:9px;background:var(--bg3);border:1px solid var(--border2);padding:1px 5px;border-radius:4px;color:var(--text3)}
+.nb{margin-top:auto;padding:14px;border-top:1px solid var(--border);font-size:11px;color:var(--text3)}
+.live{display:inline-block;width:6px;height:6px;background:var(--teal);border-radius:50%;margin-right:5px;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.sync-status{font-size:10px;color:var(--text3);margin-top:4px}
+.sync-status.ok{color:var(--teal)}.sync-status.err{color:var(--neg)}
+
+.ngroup{margin:2px 7px}
+.ngroup-head{display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:8px;cursor:pointer;font-size:11.5px;font-weight:500;color:var(--text);border:none;background:none;width:100%;text-align:left;transition:background .12s}
+.ngroup-head:hover{background:var(--bg3)}
+.ngroup-head .dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0}
+.ngroup-head .dot.e{background:var(--enmei)}
+.ngroup-head .chev{margin-left:auto;font-size:9px;color:var(--text3);transition:transform .15s}
+.ngroup.open .ngroup-head .chev{transform:rotate(90deg)}
+.ngroup-body{max-height:0;overflow:hidden;transition:max-height .2s ease}
+.ngroup.open .ngroup-body{max-height:600px}
+.ngroup-body .ni{margin:1px 0 1px 14px;width:calc(100% - 14px)}
+
+.page{display:none}.page.active{display:block}
+.ph{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap}
+.ph h1{font-family:var(--serif);font-size:26px;font-weight:400;line-height:1.2}
+.ph h1 em{font-style:italic;color:var(--enmei)}
+.ph-sub{font-size:12px;color:var(--text3);margin-top:3px}
+
+.ytabs{display:flex;gap:3px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:3px;flex-wrap:wrap}
+.ytab{padding:4px 12px;border-radius:7px;border:none;background:none;color:var(--text2);font-size:11.5px;font-family:var(--sans);cursor:pointer;transition:all .12s;white-space:nowrap}
+.ytab.active{background:var(--bg3);color:var(--text);border:1px solid var(--border2)}
+
+.custom-range{display:none;gap:8px;align-items:center;margin-top:8px}
+.custom-range.show{display:flex}
+.custom-range input{background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--sans)}
+input[type="date"]{
+  background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:7px;
+  padding:6px 12px;font-size:12.5px;font-family:var(--sans);color-scheme:dark;cursor:pointer;
+}
+input[type="date"]:hover{border-color:var(--enmei)}
+input[type="date"]:focus{outline:none;border-color:var(--enmei)}
+input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(0.6);cursor:pointer}
+.as-of-wrap{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px}
+.custom-range button{background:var(--enmei);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer}
+
+.filter-strip{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-start}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)}
+.fg select{background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;font-size:13px;font-family:var(--sans);min-width:150px}
+
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:20px}
+.mc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;position:relative;overflow:hidden}
+.mc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--enmei)}
+.mc.pos::before{background:var(--teal)}.mc.neg::before{background:var(--neg)}
+.ml{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
+.mv{font-size:20px;font-weight:500;letter-spacing:-.02em}
+.ms{font-size:10.5px;color:var(--text3);margin-top:3px}
+.pos-text{color:var(--teal)}.neg-text{color:var(--neg)}
+
+.flag-banner{display:none;align-items:center;gap:8px;background:var(--neg-bg);border:1px solid rgba(224,98,90,0.35);border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:12.5px;color:var(--text)}
+.flag-banner.show{display:flex}
+.flag-banner .dot{width:7px;height:7px;border-radius:50%;background:var(--neg);flex-shrink:0}
+
+.growth-hero{display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--bg2);border:1px solid var(--border);border-left:4px solid var(--teal);border-radius:var(--radius-lg);padding:16px 22px;margin-bottom:16px;flex-wrap:wrap}
+.growth-hero.neg{border-left-color:var(--neg)}
+.growth-hero .gh-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.growth-hero .gh-value{font-family:var(--serif);font-size:28px;font-weight:400}
+.growth-hero .gh-value.pos-text{color:var(--teal)}
+.growth-hero .gh-value.neg-text{color:var(--neg)}
+.growth-hero .gh-sub{font-size:11.5px;color:var(--text2)}
+
+.cr{display:grid;gap:14px;margin-bottom:16px}
+.cr2{grid-template-columns:1fr 1fr}
+@media(max-width:900px){.cr2{grid-template-columns:1fr}}
+.cc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px}
+.cch{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;gap:8px}
+.cct{font-size:12.5px;font-weight:500}.ccs{font-size:10.5px;color:var(--text3);margin-top:2px}
+.h260{position:relative;height:260px}
+.empty-state{color:var(--text3);font-size:13px;padding:40px 0;text-align:center}
+
+.tc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:16px}
+.tch{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.tct{font-size:12.5px;font-weight:500}
+.tscroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead th{padding:8px 14px;text-align:right;font-size:10.5px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap}
+thead th:first-child,thead th:nth-child(2),thead th:nth-child(3){text-align:left;min-width:110px}
+tbody td{padding:7px 14px;text-align:right;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);white-space:nowrap}
+tbody td:first-child,tbody td:nth-child(2),tbody td:nth-child(3){text-align:left;color:var(--text)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--bg3)}
+
+.legend{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;margin-bottom:16px}
+.legend h3{font-size:12.5px;font-weight:600;margin-bottom:10px;color:var(--text)}
+.legend-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media(max-width:900px){.legend-grid{grid-template-columns:1fr}}
+.legend dl{margin:0}
+.legend dt{font-size:12px;font-weight:500;color:var(--text);margin-top:10px}
+.legend dt:first-child{margin-top:0}
+.legend dd{font-size:11.5px;color:var(--text2);margin:2px 0 0;line-height:1.55}
+.legend .caveat{color:var(--neg)}
+
+.soon-box{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;padding:40px}
+.soon-box h2{font-family:var(--serif);font-size:24px;font-weight:400;margin-bottom:12px}
+.soon-box p{font-size:13px;color:var(--text2);max-width:420px;line-height:1.7}
+
+#loading{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;transition:opacity .4s}
+#loading.hidden{opacity:0;pointer-events:none}
+.spinner{width:32px;height:32px;border:2px solid var(--border2);border-top-color:var(--enmei);border-radius:50%;animation:spin .7s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading p{font-size:13px;color:var(--text3)}
+
+/* Class Performance -- heatmap grid */
+.hm-wrap{overflow-x:auto}
+.hm-grid{display:grid;gap:2px;min-width:640px}
+.hm-cell{border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:rgba(255,255,255,0.85);min-height:26px;position:relative;cursor:default}
+.hm-cell.empty{background:var(--bg3);color:var(--text3)}
+.hm-cell:hover::after{
+  content:attr(data-tip);position:absolute;bottom:100%;left:50%;transform:translateX(-50%);
+  background:var(--bg4);border:1px solid var(--border2);color:var(--text);font-size:10.5px;
+  padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:20;margin-bottom:4px;pointer-events:none;
+}
+.hm-rowlabel{font-size:10px;color:var(--text3);display:flex;align-items:center;justify-content:flex-end;padding-right:6px}
+.hm-collabel{font-size:9px;color:var(--text3);text-align:center;padding-bottom:3px}
+.hm-legend{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:10.5px;color:var(--text3)}
+.hm-legend-scale{display:flex;height:8px;width:120px;border-radius:4px;overflow:hidden}
+.hm-legend-scale span{flex:1}
+
+.cp-compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.cp-studio-check{display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;font-size:11.5px;color:var(--text2);cursor:pointer;user-select:none}
+.cp-studio-check input{cursor:pointer}
+.toggle-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.toggle-switch{position:relative;width:34px;height:19px;background:var(--bg4);border:1px solid var(--border2);border-radius:10px;cursor:pointer;flex-shrink:0;transition:background .15s}
+.toggle-switch.on{background:var(--enmei)}
+.toggle-switch .knob{position:absolute;top:1px;left:1px;width:15px;height:15px;background:var(--text);border-radius:50%;transition:transform .15s}
+.toggle-switch.on .knob{transform:translateX(15px)}
+.toggle-label{font-size:12px;color:var(--text2)}
+
+.momentum-list{display:flex;flex-direction:column;gap:6px}
+.momentum-row{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg3);border-radius:8px;font-size:12px}
+.momentum-row .mr-name{color:var(--text)}
+.momentum-row .mr-val{font-weight:500}
+.flag-row{background:var(--bg3);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:3px}
+.flag-row-top{display:flex;justify-content:space-between;align-items:baseline;font-size:12px}
+.flag-row-top .mr-name{color:var(--text)}
+.flag-row-top .mr-val{font-weight:500}
+.flag-row-sub{font-size:10.5px;color:var(--text3)}
+
+.coach-select-wrap{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div><p id="load-msg">Connecting to Google Sheets…</p></div>
+
+<div class="layout">
+<nav>
+  <div class="nav-logo">
+    <div class="wm">Enmei</div>
+    <div class="ws">Commercial Dashboard</div>
+  </div>
+
+  <div class="ngroup open" id="group-membership">
+    <button class="ngroup-head" onclick="toggleGroup('membership')"><span class="dot e"></span>Membership Health<span class="chev">▶</span></button>
+    <div class="ngroup-body">
+      <button class="ni active" onclick="goTo('mh-overview',this)">Overview</button>
+      <button class="ni" onclick="goTo('mh-revenue',this)">Revenue</button>
+      <button class="ni" onclick="goTo('mh-churn-overview',this)">Retention Overview</button>
+      <button class="ni" onclick="goTo('mh-churn-atrisk',this)">At Risk / Term Ending</button>
+      <button class="ni" onclick="goTo('mh-churn-deepdive',this)">Retention Deep Dive</button>
+      <button class="ni" onclick="goTo('mh-definitions',this)">Definitions &amp; Methodology</button>
+    </div>
+  </div>
+
+  <div class="ngroup" id="group-introoffers">
+    <button class="ngroup-head" onclick="toggleGroup('introoffers')"><span class="dot e"></span>Intro Offers<span class="chev">▶</span></button>
+    <div class="ngroup-body">
+      <button class="ni" onclick="goTo('io-overview',this)">Overview</button>
+      <button class="ni" onclick="goTo('io-expiring',this)">Expiring &amp; Outreach</button>
+      <button class="ni" onclick="goTo('io-comparison',this)">Comparison &amp; Conversion</button>
+      <button class="ni" onclick="goTo('io-summerstrong',this)">Summer Strong</button>
+      <button class="ni" onclick="goTo('io-definitions',this)">Definitions &amp; Methodology</button>
+    </div>
+  </div>
+
+  <div class="ngroup" id="group-classperf">
+    <button class="ngroup-head" onclick="toggleGroup('classperf')"><span class="dot e"></span>Class Performance<span class="chev">▶</span></button>
+    <div class="ngroup-body">
+      <button class="ni" onclick="goTo('cp-overview',this)">Overview</button>
+      <button class="ni" onclick="goTo('cp-coaches',this)">Coach Performance</button>
+      <button class="ni" onclick="goTo('cp-definitions',this)">Definitions &amp; Methodology</button>
+    </div>
+  </div>
+
+  <div class="ngroup" id="group-sales">
+    <button class="ngroup-head" onclick="toggleGroup('sales')"><span class="dot"></span>Sales & Marketing<span class="chev">▶</span></button>
+    <div class="ngroup-body">
+      <button class="ni" onclick="goTo('soon',this)">Overview<span class="pill">Soon</span></button>
+      <button class="ni" onclick="goTo('soon',this)">Credit Packs<span class="pill">Soon</span></button>
+      <button class="ni" onclick="goTo('soon',this)">Prospecting<span class="pill">Soon</span></button>
+    </div>
+  </div>
+
+  <div class="nb">
+    <span class="live"></span>Live data<br>
+    <span class="sync-status" id="sync-status">Connecting…</span>
+  </div>
+</nav>
+
+<main id="main">
+
+<!-- ══════════════════════ OVERVIEW ══════════════════════ -->
+<div class="page active" id="page-mh-overview">
+  <div class="ph"><div>
+    <h1>Membership <em>Overview</em></h1>
+    <div class="ph-sub">Enmei · real purchase/cancellation history · all figures GBP</div>
+  </div></div>
+
+  <div class="growth-hero" id="growth-hero">
+    <div><div class="gh-label">Net member growth</div><div class="gh-value" id="gh-value">—</div></div>
+    <div class="gh-sub" id="gh-sub"></div>
+  </div>
+
+  <div class="flag-banner" id="churn-flag"><span class="dot"></span><span id="churn-flag-text"></span></div>
+  <div class="flag-banner" id="freeze-flag"><span class="dot"></span><span id="freeze-flag-text"></span></div>
+
+  <div class="ytabs" id="studio-tabs-ov" style="margin-bottom:16px">
+    <button class="ytab active" onclick="setStudio('ov','all',this)">All Studios</button>
+  </div>
+
+  <div style="margin-bottom:16px">
+    <div class="ytabs" id="tf-tabs-ov">
+      <button class="ytab active" onclick="setTimeframe('ov','28d',this)">28D</button>
+      <button class="ytab" onclick="setTimeframe('ov','mtd',this)">MTD</button>
+      <button class="ytab" onclick="setTimeframe('ov','lastmonth',this)">Last Month</button>
+      <button class="ytab" onclick="setTimeframe('ov','ytd',this)">YTD</button>
+      <button class="ytab" onclick="setTimeframe('ov','12m',this)">12M</button>
+      <button class="ytab" onclick="setTimeframe('ov','alltime',this)">All time</button>
+      <button class="ytab" onclick="showCustomRange('ov',this)">Custom</button>
+    </div>
+    <div class="custom-range" id="custom-range-box-ov">
+      <input type="date" id="custom-start-ov">
+      <span style="color:var(--text3);font-size:12px">to</span>
+      <input type="date" id="custom-end-ov">
+      <button onclick="applyCustomRange('ov')">Apply</button>
+    </div>
+    <div style="margin-top:8px">
+      <button class="ytab" onclick="toggleCompareBox('ov')" style="background:var(--bg2);border:1px solid var(--border)">Compare to <span id="compare-toggle-arrow-ov" style="display:inline-block;transition:transform .15s">▶</span><span id="compare-mode-label-ov" style="color:var(--text3);margin-left:4px"></span></button>
+      <div id="compare-box-ov" style="display:none;margin-top:8px">
+        <div class="ytabs" id="compare-tabs-ov">
+          <button class="ytab active" onclick="setCompareMode('ov','none',this)">None</button>
+          <button class="ytab" onclick="setCompareMode('ov','previous_period',this)">Previous Period</button>
+          <button class="ytab" onclick="setCompareMode('ov','previous_month',this)">Previous Month</button>
+          <button class="ytab" onclick="setCompareMode('ov','last_year',this)">Same Period Last Year</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="filter-strip">
+    <div class="fg">
+      <label for="f-tier-ov">Membership tier</label>
+      <select id="f-tier-ov"><option value="all">All tiers</option></select>
+    </div>
+  </div>
+
+  <div class="mgrid" id="ov-metrics"></div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Ongoing members over time</div><div class="ccs">Not cancelled -- includes frozen &amp; payment failure</div></div></div>
+    <div class="h260"><canvas id="chartActive"></canvas></div>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Ongoing members by studio over time</div><div class="ccs">Always shows all studios, regardless of the studio toggle above</div></div></div>
+    <div class="h260"><canvas id="chartStudioCompare"></canvas></div>
+  </div>
+
+  <div class="tc">
+    <div class="tch"><span class="tct">Studio comparison</span><span class="ccs" style="margin:0">All studios, selected timeframe/tier</span></div>
+    <div class="tscroll">
+      <table id="studio-compare-table">
+        <thead><tr><th>Studio</th><th>Ongoing</th><th>MRR</th><th>Growth</th><th>Churn Rate</th><th>Cancelled</th><th>Frozen</th></tr></thead>
+        <tbody id="studio-compare-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Status mix</div><div class="ccs">Strict live status, right now. Excludes cancelled, done, terminated</div></div></div>
+    <div class="h260"><canvas id="chartMix"></canvas></div>
+  </div>
+
+  <div class="tc">
+    <div class="tch" style="cursor:pointer" onclick="toggleTableDetail()">
+      <span class="tct">Right now — full detail <span id="table-toggle-arrow" style="display:inline-block;transition:transform .15s">▶</span></span>
+      <span class="ccs" style="margin:0">See Churn &amp; Retention for cancellation figures.</span>
+    </div>
+    <div class="tscroll" id="table-detail-body" style="display:none">
+      <table id="m-table">
+        <thead><tr><th>Studio</th><th>Tier</th><th>Membership Type</th><th>Active</th><th>Frozen</th><th>Terminated</th><th>Payment Fail</th><th>Ding Fail</th><th>Done</th><th>MRR</th></tr></thead>
+        <tbody id="m-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ REVENUE ══════════════════════ -->
+<div class="page" id="page-mh-revenue">
+  <div class="ph"><div>
+    <h1>Membership <em>Revenue</em></h1>
+    <div class="ph-sub">Enmei · Monthly Recurring Revenue · GBP</div>
+  </div></div>
+
+  <div class="flag-banner" id="rev-risk-flag"><span class="dot"></span><span id="rev-risk-flag-text"></span></div>
+  <div class="flag-banner" id="rev-concentration-flag"><span class="dot"></span><span id="rev-concentration-flag-text"></span></div>
+
+  <div class="ytabs" id="studio-tabs-rev" style="margin-bottom:16px">
+    <button class="ytab active" onclick="setStudio('rev','all',this)">All Studios</button>
+  </div>
+
+  <div class="ytabs" id="tf-tabs-rev" style="margin-bottom:8px">
+    <button class="ytab active" onclick="setTimeframe('rev','28d',this)">28D</button>
+    <button class="ytab" onclick="setTimeframe('rev','mtd',this)">MTD</button>
+    <button class="ytab" onclick="setTimeframe('rev','lastmonth',this)">Last Month</button>
+    <button class="ytab" onclick="setTimeframe('rev','ytd',this)">YTD</button>
+    <button class="ytab" onclick="setTimeframe('rev','12m',this)">12M</button>
+    <button class="ytab" onclick="setTimeframe('rev','alltime',this)">All time</button>
+    <button class="ytab" onclick="showCustomRange('rev',this)">Custom</button>
+  </div>
+  <div class="custom-range" id="custom-range-box-rev" style="margin-bottom:16px">
+    <input type="date" id="custom-start-rev">
+    <span style="color:var(--text3);font-size:12px">to</span>
+    <input type="date" id="custom-end-rev">
+    <button onclick="applyCustomRange('rev')">Apply</button>
+  </div>
+
+  <div class="filter-strip">
+    <div class="fg">
+      <label for="f-tier-rev">Membership tier</label>
+      <select id="f-tier-rev"><option value="all">All tiers</option></select>
+    </div>
+  </div>
+
+  <div class="mgrid" id="rev-metrics"></div>
+
+  <div class="tc">
+    <div class="tch" style="cursor:pointer" onclick="toggleRiskDetail()">
+      <span class="tct">Payment failure / ding failure -- outreach list <span id="risk-toggle-arrow" style="display:inline-block;transition:transform .15s">▶</span></span>
+      <span class="ccs" style="margin:0">ID-only, no names -- staff look up customer_id directly in Mariana Tek. Right now, not affected by the timeframe above.</span>
+    </div>
+    <div class="tscroll" id="risk-detail-body" style="display:none">
+      <div style="padding:10px 18px"><button onclick="exportRiskCSV()" style="background:var(--enmei);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">Export CSV</button></div>
+      <table id="risk-table">
+        <thead><tr><th>Customer ID</th><th>Membership ID</th><th>Studio</th><th>Tier</th><th>Membership Type</th><th>Status</th><th>MRR at Risk</th></tr></thead>
+        <tbody id="risk-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">MRR over time</div><div class="ccs">Always shows full available history, regardless of the timeframe toggle below (studio/tier filters still apply). By calendar month, matching the live MRR definition (excludes frozen). Does not exclude payment-failure periods historically -- see Definitions page</div></div></div>
+    <div class="h260"><canvas id="chartMrrOverTime"></canvas></div>
+  </div>
+
+  <div class="cr cr2">
+    <div class="cc"><div class="cch"><div><div class="cct">MRR by tier</div><div class="ccs">Right now</div></div></div><div class="h260"><canvas id="chartRevenueTier"></canvas></div></div>
+    <div class="cc"><div class="cch"><div><div class="cct">MRR by membership type</div><div class="ccs">Right now</div></div></div><div class="h260"><canvas id="chartRevenueType"></canvas></div></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ CHURN & RETENTION ══════════════════════ -->
+<!-- ══════════════════════ RETENTION OVERVIEW ══════════════════════ -->
+<div class="page" id="page-mh-churn-overview">
+  <div class="ph"><div>
+    <h1>Retention <em>Overview</em></h1>
+    <div class="ph-sub">Enmei · are we losing members, and why</div>
+  </div></div>
+
+  <div class="ytabs" id="studio-tabs-cho" style="margin-bottom:16px">
+    <button class="ytab active" onclick="setStudio('cho','all',this)">All Studios</button>
+  </div>
+
+  <div class="ytabs" id="tf-tabs-cho" style="margin-bottom:8px">
+    <button class="ytab active" onclick="setTimeframe('cho','28d',this)">28D</button>
+    <button class="ytab" onclick="setTimeframe('cho','mtd',this)">MTD</button>
+    <button class="ytab" onclick="setTimeframe('cho','lastmonth',this)">Last Month</button>
+    <button class="ytab" onclick="setTimeframe('cho','ytd',this)">YTD</button>
+    <button class="ytab" onclick="setTimeframe('cho','12m',this)">12M</button>
+    <button class="ytab" onclick="setTimeframe('cho','alltime',this)">All time</button>
+    <button class="ytab" onclick="showCustomRange('cho',this)">Custom</button>
+  </div>
+  <div class="custom-range" id="custom-range-box-cho" style="margin-bottom:16px">
+    <input type="date" id="custom-start-cho">
+    <span style="color:var(--text3);font-size:12px">to</span>
+    <input type="date" id="custom-end-cho">
+    <button onclick="applyCustomRange('cho')">Apply</button>
+  </div>
+  <div style="margin-bottom:16px">
+    <button class="ytab" onclick="toggleCompareBox('cho')" style="background:var(--bg2);border:1px solid var(--border)">Compare to <span id="compare-toggle-arrow-cho" style="display:inline-block;transition:transform .15s">▶</span><span id="compare-mode-label-cho" style="color:var(--text3);margin-left:4px"></span></button>
+    <div id="compare-box-cho" style="display:none;margin-top:8px">
+      <div class="ytabs" id="compare-tabs-cho">
+        <button class="ytab active" onclick="setCompareMode('cho','none',this)">None</button>
+        <button class="ytab" onclick="setCompareMode('cho','previous_period',this)">Previous Period</button>
+        <button class="ytab" onclick="setCompareMode('cho','previous_month',this)">Previous Month</button>
+        <button class="ytab" onclick="setCompareMode('cho','last_year',this)">Same Period Last Year</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="filter-strip">
+    <div class="fg">
+      <label for="f-tier-cho">Membership tier</label>
+      <select id="f-tier-cho"><option value="all">All tiers</option></select>
+    </div>
+  </div>
+
+  <div class="mgrid" id="cho-metrics"></div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">New vs. cancelled vs. frozen over time</div><div class="ccs">Per week, for the selected filters</div></div></div>
+    <div class="h260"><canvas id="chartNewCancelled"></canvas></div>
+  </div>
+
+  <div class="cc">
+    <div class="cch"><div><div class="cct">Cancellation reasons over time</div><div class="ccs" id="reasons-sub">Genuine departures only -- see Definitions page. Cost &amp; Other (warm colors) are within our control; Moving &amp; Injury (cool colors) generally aren't.</div></div></div>
+    <div class="h260"><canvas id="chartReasons"></canvas></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ AT RISK / TERM ENDING ══════════════════════ -->
+<div class="page" id="page-mh-churn-atrisk">
+  <div class="ph"><div>
+    <h1>At Risk <em>/ Term Ending</em></h1>
+    <div class="ph-sub">Enmei · who to reach out to this week</div>
+  </div></div>
+
+  <div class="growth-hero" id="term-end-hero" style="border-left-color:var(--slate)">
+    <div><div class="gh-label">Nearing end of 6-month term (next 30 days)</div><div class="gh-value" id="term-end-hero-value" style="color:var(--slate)">—</div></div>
+    <div class="gh-sub">Respects the studio/tier filters below. Always shows the next 30 days -- this list is about right now, not a historical timeframe.</div>
+  </div>
+
+  <div class="ytabs" id="studio-tabs-car" style="margin-bottom:16px">
+    <button class="ytab active" onclick="setStudio('car','all',this)">All Studios</button>
+  </div>
+
+  <div class="filter-strip">
+    <div class="fg">
+      <label for="f-tier-car">Membership tier</label>
+      <select id="f-tier-car"><option value="all">All tiers</option></select>
+    </div>
+  </div>
+
+  <div class="tc">
+    <div class="tch">
+      <span class="tct">Nearing end of 6-month term</span>
+      <span class="ccs" style="margin:0">ID-only, no names -- staff look up customer_id directly in Mariana Tek.</span>
+    </div>
+    <div class="tscroll" id="term-end-detail-body">
+      <div style="padding:10px 18px"><button onclick="exportTermEndCSV()" style="background:var(--enmei);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">Export CSV</button></div>
+      <table id="term-end-table">
+        <thead><tr><th>Customer ID</th><th>Membership ID</th><th>Studio</th><th>Tier</th><th>Membership Type</th><th>Term Ends</th></tr></thead>
+        <tbody id="term-end-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ RETENTION DEEP DIVE ══════════════════════ -->
+<div class="page" id="page-mh-churn-deepdive">
+  <div class="ph"><div>
+    <h1>Retention <em>Deep Dive</em></h1>
+    <div class="ph-sub">Enmei · when &amp; why people leave, and the term-renewal cycle</div>
+  </div></div>
+
+  <div class="ytabs" id="studio-tabs-cdd" style="margin-bottom:16px">
+    <button class="ytab active" onclick="setStudio('cdd','all',this)">All Studios</button>
+  </div>
+
+  <div class="ytabs" id="tf-tabs-cdd" style="margin-bottom:8px">
+    <button class="ytab active" onclick="setTimeframe('cdd','28d',this)">28D</button>
+    <button class="ytab" onclick="setTimeframe('cdd','mtd',this)">MTD</button>
+    <button class="ytab" onclick="setTimeframe('cdd','lastmonth',this)">Last Month</button>
+    <button class="ytab" onclick="setTimeframe('cdd','ytd',this)">YTD</button>
+    <button class="ytab" onclick="setTimeframe('cdd','12m',this)">12M</button>
+    <button class="ytab" onclick="setTimeframe('cdd','alltime',this)">All time</button>
+    <button class="ytab" onclick="showCustomRange('cdd',this)">Custom</button>
+  </div>
+  <div class="custom-range" id="custom-range-box-cdd" style="margin-bottom:16px">
+    <input type="date" id="custom-start-cdd">
+    <span style="color:var(--text3);font-size:12px">to</span>
+    <input type="date" id="custom-end-cdd">
+    <button onclick="applyCustomRange('cdd')">Apply</button>
+  </div>
+  <div style="margin-bottom:16px">
+    <button class="ytab" onclick="toggleCompareBox('cdd')" style="background:var(--bg2);border:1px solid var(--border)">Compare to <span id="compare-toggle-arrow-cdd" style="display:inline-block;transition:transform .15s">▶</span><span id="compare-mode-label-cdd" style="color:var(--text3);margin-left:4px"></span></button>
+    <div id="compare-box-cdd" style="display:none;margin-top:8px">
+      <div class="ytabs" id="compare-tabs-cdd">
+        <button class="ytab active" onclick="setCompareMode('cdd','none',this)">None</button>
+        <button class="ytab" onclick="setCompareMode('cdd','previous_period',this)">Previous Period</button>
+        <button class="ytab" onclick="setCompareMode('cdd','previous_month',this)">Previous Month</button>
+        <button class="ytab" onclick="setCompareMode('cdd','last_year',this)">Same Period Last Year</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="filter-strip">
+    <div class="fg">
+      <label for="f-tier-cdd">Membership tier</label>
+      <select id="f-tier-cdd"><option value="all">All tiers</option></select>
+    </div>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Post-term continuation: did they stay after completing 6 months?</div><div class="ccs">Scoped to memberships whose term ended within the selected timeframe above. Only counts memberships that actually reached their 6-month term end without leaving early -- early leavers are excluded entirely, since this is specifically about what happens once someone completes their commitment. A plan switch/upgrade counts as "continued," not a dropout.</div></div></div>
+    <div class="mgrid" id="post-term-metrics" style="margin-bottom:0"></div>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Dropoff timing (all genuine departures)</div><div class="ccs">"Genuine" excludes upgrades, downgrades, and studio switches -- those aren't real departures. Among genuine departures in the selected range, how many months into their membership were they when they cancelled -- including early leavers who never reached term end. Dynamic range, no cap.</div></div></div>
+    <div class="h260"><canvas id="chartDropoff"></canvas></div>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Dropoff after renewal</div><div class="ccs">Only counts people who completed their first 6-month term and renewed, then later cancelled for real. "1 month" means they cancelled within their first month of the renewed term -- these are months into the new commitment, not the original one. A cluster near the start means the renewal itself isn't sticking; a cluster near month 6 of the new term means the same 6-month decision point is repeating.</div></div></div>
+    <div class="h260"><canvas id="chartPostTermDropoff"></canvas></div>
+  </div>
+
+  <div class="cc">
+    <div class="cch"><div><div class="cct">Membership tenure mix</div><div class="ccs" id="tenure-mix-sub">How long members were with us as of the selected date. Note: memberships are 6-month commitments with an option to renew, so drop-off around the 3-6/6-12 month buckets may reflect natural non-renewal, not dissatisfaction</div></div></div>
+    <div class="as-of-wrap" style="margin-bottom:12px;width:fit-content">
+      <label style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)">As of date</label>
+      <input type="date" id="as-of-date-cdd">
+      <button class="ytab" onclick="resetAsOfDateCdd()">Today</button>
+    </div>
+    <div class="h260"><canvas id="chartAgePyramid"></canvas></div>
+  </div>
+</div>
+
+
+<div class="page" id="page-mh-definitions">
+  <div class="ph"><div>
+    <h1>Definitions &amp; <em>Methodology</em></h1>
+    <div class="ph-sub">How every number on the Membership Health pages is calculated</div>
+  </div></div>
+
+  <div class="legend">
+    <div class="legend-grid">
+      <dl>
+        <dt>Ongoing members</dt>
+        <dd>Started and not yet cancelled. Includes frozen and payment-failure memberships -- broader than "active."</dd>
+
+        <dt>Active (status mix chart / table)</dt>
+        <dd>Strict, real-time status from Mariana Tek. Excludes frozen, payment failure, terminated, etc.</dd>
+
+        <dt>MRR (Monthly Recurring Revenue)</dt>
+        <dd>Exact sum of each membership's real renewal_rate, right now, for memberships whose live status is strictly "active" -- not an estimate or average. Frozen, payment-failure, terminated, and all other non-active statuses are excluded, since those memberships are not being charged their normal rate while in that state. Assumes all billing is monthly (confirmed with the business). Does not include the £30 freeze fee.</dd>
+
+        <dt>Cancelled</dt>
+        <dd>Count of memberships whose real cancellation date falls within the timeframe selected on each page.</dd>
+
+        <dt>New / Cancelled / Frozen over time</dt>
+        <dd>Per week: new = started that week; cancelled = cancellation date fell that week; frozen = under an active freeze at that point in time. All from real dates.</dd>
+
+        <dt>Growth % / Avg weekly churn rate</dt>
+        <dd>Growth = (Ongoing at end - Ongoing at start) / Ongoing at start. Churn rate = the average of each individual week's own churn rate (that week's cancellations / that week's active count) across the selected range -- NOT total cancellations divided by a single starting count. That simpler approach breaks down for long lookbacks: the starting denominator can be tiny (e.g. early in the business) while cancellations accumulate from many people who joined later, producing nonsense numbers over 100%. Averaging weekly rates keeps this meaningful regardless of how long a range you pick.</dd>
+      </dl>
+      <dl>
+        <dt>Compare to (Previous Period / Previous Month / Same Period Last Year)</dt>
+        <dd>The comparison window always matches the length of your selected range, not a whole calendar unit -- e.g. MTD on 18 July (1-18 July) compares to 1-18 June for "Previous Month," not all of June. On Overview and Churn &amp; Retention metric cards, only applies as small delta badges -- not overlaid on the weekly trend charts (New/Cancelled/Frozen, Cancellation Reasons), since those are tied to real calendar dates and a true overlay would need re-indexing to relative week numbers to be readable. The Dropoff timing chart is the exception -- its buckets are already categorical (Month 1, 2, 3...), so a real overlay works well there.</dd>
+
+        <dt>Post-term continuation: did they stay after completing 6 months?</dt>
+        <dd>Cohort = memberships whose 6-month term end date falls within the selected timeframe AND has already passed. Critically, anyone who cancelled BEFORE reaching their term end is excluded entirely from this cohort -- they never completed the term, so they're not part of this question. Within the remaining cohort: "Continued" = never cancelled, or cancelled but it was a plan switch/upgrade (not a real departure). "Did not continue" = a genuine cancellation that happened at or after their term end. Because this is scoped by term end date (not cancellation date), the numbers genuinely change as you adjust the timeframe above.</dd>
+
+        <dt>Dropoff after renewal</dt>
+        <dd>For the "did not continue" group only (from Post-term continuation above): months between their term end date (when they renewed) and their actual cancellation date. "Renewed +1mo" means 1 month into the NEW term, not the original 6-month commitment -- these people already completed their first term successfully. Dynamic range -- extends as far as real data goes, no artificial cap.</dd>
+
+        <dt>Dropoff timing (all genuine departures)</dt>
+        <dd>Months between membership start date and cancellation date, for every genuine departure in the selected range -- including early leavers who never reached their 6-month term end, unlike the chart above. Excludes upgrades, downgrades, and studio switches, same as everywhere else on this page. Shown as % share of departures per month, so the shape is comparable even when comparing periods with very different total volumes. Dynamic month range, no cap.</dd>
+
+        <dt class="caveat">Caveat: tier classification</dt>
+        <dd>Tiers are assigned by matching keywords in each membership's name. A few edge cases were manually resolved with the business.</dd>
+
+        <dt class="caveat">Caveat: excluded from all views</dt>
+        <dd>"1 Week Unlimited" (a real intro offer) and "Recovery/Compression Boots" (a client perk) are excluded everywhere. Mariana Tek's own "is_intro_offer" flag does NOT reliably mark 1 Week Unlimited -- exclusion is done by name instead.</dd>
+
+        <dt class="caveat">Caveat: upgrades, downgrades &amp; studio switches are not counted as churn</dt>
+        <dd>When a cancellation is followed within 3 days by a new membership for the same customer, it's treated as a plan change or studio switch, not a real departure. These pairs are excluded from both cancelled and new-signup counts everywhere. If a cancellation is labeled upgrade/downgrade/new_home_studio but no matching new membership was found within 3 days, it still counts as real churn -- it shows up in the "Other" bucket of the cancellation-reasons chart, since "Other" catches everything not explicitly cost/moving/injury. This keeps the reasons breakdown always summing to the same total as the top-level "Cancelled" count.</dd>
+
+        <dt>MRR over time (Revenue page)</dt>
+        <dd>Each calendar month shows the last available weekly snapshot within that month (not a sum of all weeks -- revenue is a point-in-time total, summing weeks would multiply-count the same ongoing revenue). Excludes frozen memberships to match the live MRR definition exactly.</dd>
+
+        <dt class="caveat">Caveat: historical MRR doesn't exclude payment failures</dt>
+        <dd>Unlike frozen periods (which have clean start/end dates we can reconstruct), there's no clear "payment failure resolved" date in the data -- so MRR over time can't precisely exclude payment-failure weeks the way live "right now" MRR does. This means historical MRR may run very slightly higher than true MRR during weeks with active payment failures. Frozen exclusion is exact; payment-failure exclusion is not yet possible historically.</dd>
+
+        <dt class="caveat">Caveat: freeze fees not tracked</dt>
+        <dd>The £30 freeze fee (first month free) is not yet reflected in MRR or revenue figures.</dd>
+
+        <dt class="caveat">Caveat: "Nearing term end" and "Payment risk" lists are ID-only</dt>
+        <dd>No names shown, since the underlying Google Sheet is published to web. Staff look up customer_id directly in Mariana Tek for outreach. A private, non-published sheet with real names is a planned follow-up.</dd>
+
+        <dt>Revenue concentration flag</dt>
+        <dd>Fires when the single largest membership tier accounts for 50% or more of total MRR -- a real exposure if that tier's demand or pricing changes.</dd>
+      </dl>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ INTRO OFFERS ══════════════════════ -->
+<!-- ══════════════════════ INTRO OFFERS: OVERVIEW ══════════════════════ -->
+<div class="page" id="page-io-overview">
+  <div class="ph"><div>
+    <h1>Intro Offers <em>Overview</em></h1>
+    <div class="ph-sub">Enmei · how intro offers are converting overall</div>
+  </div></div>
+
+  <div class="ytabs" id="studio-tabs-io" style="margin-bottom:16px">
+    <button class="ytab active" onclick="setStudio('io','all',this)">All Studios</button>
+  </div>
+
+  <div class="ytabs" id="tf-tabs-io" style="margin-bottom:8px">
+    <button class="ytab active" onclick="setTimeframe('io','28d',this)">28D</button>
+    <button class="ytab" onclick="setTimeframe('io','mtd',this)">MTD</button>
+    <button class="ytab" onclick="setTimeframe('io','lastmonth',this)">Last Month</button>
+    <button class="ytab" onclick="setTimeframe('io','ytd',this)">YTD</button>
+    <button class="ytab" onclick="setTimeframe('io','12m',this)">12M</button>
+    <button class="ytab" onclick="setTimeframe('io','alltime',this)">All time</button>
+    <button class="ytab" onclick="showCustomRange('io',this)">Custom</button>
+  </div>
+  <div class="custom-range" id="custom-range-box-io" style="margin-bottom:16px">
+    <input type="date" id="custom-start-io">
+    <span style="color:var(--text3);font-size:12px">to</span>
+    <input type="date" id="custom-end-io">
+    <button onclick="applyCustomRange('io')">Apply</button>
+  </div>
+  <div class="ccs" style="margin-bottom:8px">Timeframe affects the trend chart and the metric cards below. The lifetime-outcome Sankey chart always shows all history, since outcomes can take months to resolve. For head-to-head product comparison, attendance correlation, and time-to-convert, see Comparison &amp; Conversion.</div>
+
+  <div class="fg" style="margin-bottom:16px">
+    <label for="f-intro-type-io">Intro offer type</label>
+    <select id="f-intro-type-io">
+      <option value="all">Both types</option>
+      <option value="1 Week Unlimited">1 Week Unlimited</option>
+      <option value="Welcome 3">Welcome 3</option>
+    </select>
+  </div>
+
+  <div class="mgrid" id="io-metrics"></div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">What happens after an intro offer? (lifetime outcome)</div><div class="ccs">Not just their very next purchase -- tracks forward however long it takes. "Converted" = ever bought a real membership or 5+ credit/class pack, at any point.</div></div></div>
+    <div style="height:320px"><canvas id="chartIntroSankey"></canvas></div>
+  </div>
+
+  <div class="cc">
+    <div class="cch"><div><div class="cct">Starters &amp; conversions over time</div><div class="ccs">Per week, for the selected filters</div></div></div>
+    <div class="h260"><canvas id="chartIntroTrend"></canvas></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ INTRO OFFERS: EXPIRING & OUTREACH ══════════════════════ -->
+<div class="page" id="page-io-expiring">
+  <div class="ph"><div>
+    <h1>Expiring <em>&amp; Outreach</em></h1>
+    <div class="ph-sub">Enmei · who's about to expire, right now</div>
+  </div></div>
+
+  <div class="ytabs" id="studio-tabs-ioe" style="margin-bottom:16px">
+    <button class="ytab active" onclick="setStudio('ioe','all',this)">All Studios</button>
+  </div>
+
+  <div class="fg" style="margin-bottom:16px">
+    <label for="f-intro-type-ioe">Intro offer type</label>
+    <select id="f-intro-type-ioe">
+      <option value="all">Both types</option>
+      <option value="1 Week Unlimited">1 Week Unlimited</option>
+      <option value="Welcome 3">Welcome 3</option>
+    </select>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Expiring &amp; expired -- outreach priority</div><div class="ccs">Aggregate counts only, no names -- the team's existing weekly outreach automation already sends the real client list. Always shows "right now" -- there's no timeframe toggle on this page since one wouldn't do anything (see Definitions).</div></div></div>
+    <div class="fg" style="margin-bottom:12px">
+      <label for="f-expiring-view">View</label>
+      <select id="f-expiring-view">
+        <option value="all">All urgency levels</option>
+        <option value="expiring_soon">Expiring soon</option>
+        <option value="low_usage">Low usage (Welcome 3)</option>
+        <option value="expired">Recently expired (last 30 days)</option>
+      </select>
+    </div>
+    <div class="mgrid" id="io-expiring-metrics" style="margin-bottom:12px"></div>
+    <div class="tscroll">
+      <table id="io-expiring-table">
+        <thead><tr><th>Intro Type</th><th>Studio</th><th>Tag</th><th>Count</th><th>Avg Days Until Expiration</th></tr></thead>
+        <tbody id="io-expiring-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ INTRO OFFERS: COMPARISON & CONVERSION ══════════════════════ -->
+<div class="page" id="page-io-comparison">
+  <div class="ph"><div>
+    <h1>Comparison <em>&amp; Conversion</em></h1>
+    <div class="ph-sub">Enmei · 1 Week Unlimited vs. Welcome 3, and what predicts conversion</div>
+  </div></div>
+
+  <div class="ytabs" id="studio-tabs-ioc" style="margin-bottom:16px">
+    <button class="ytab active" onclick="setStudio('ioc','all',this)">All Studios</button>
+  </div>
+
+  <div class="ytabs" id="tf-tabs-ioc" style="margin-bottom:8px">
+    <button class="ytab active" onclick="setTimeframe('ioc','28d',this)">28D</button>
+    <button class="ytab" onclick="setTimeframe('ioc','mtd',this)">MTD</button>
+    <button class="ytab" onclick="setTimeframe('ioc','lastmonth',this)">Last Month</button>
+    <button class="ytab" onclick="setTimeframe('ioc','ytd',this)">YTD</button>
+    <button class="ytab" onclick="setTimeframe('ioc','12m',this)">12M</button>
+    <button class="ytab" onclick="setTimeframe('ioc','alltime',this)">All time</button>
+    <button class="ytab" onclick="showCustomRange('ioc',this)">Custom</button>
+  </div>
+  <div class="custom-range" id="custom-range-box-ioc" style="margin-bottom:16px">
+    <input type="date" id="custom-start-ioc">
+    <span style="color:var(--text3);font-size:12px">to</span>
+    <input type="date" id="custom-end-ioc">
+    <button onclick="applyCustomRange('ioc')">Apply</button>
+  </div>
+
+  <div class="fg" style="margin-bottom:16px">
+    <label for="f-intro-type-ioc">Intro offer type</label>
+    <select id="f-intro-type-ioc">
+      <option value="all">Both types</option>
+      <option value="1 Week Unlimited">1 Week Unlimited</option>
+      <option value="Welcome 3">Welcome 3</option>
+    </select>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Conversion speed</div><div class="ccs">Of converters in this timeframe, % who converted within N days of starting their intro offer</div></div></div>
+    <div class="mgrid" id="io-speed-metrics" style="margin-bottom:0"></div>
+  </div>
+
+  <div class="tc">
+    <div class="tch"><span class="tct">Head-to-head: 1 Week Unlimited vs. Welcome 3</span><span class="ccs" style="margin:0">Always shows both, regardless of the intro type dropdown above -- respects date range/studio</span></div>
+    <div class="tscroll">
+      <table id="io-headtohead-table">
+        <thead><tr><th>Intro Type</th><th>Starters</th><th>Converted (membership)</th><th>Converted (pack)</th><th>Hopped</th><th>Casual Only</th><th>No Further</th><th>Converted within 30d</th></tr></thead>
+        <tbody id="io-headtohead-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="height:16px"></div>
+
+  <div class="tc">
+    <div class="tch"><span class="tct">1 Week Unlimited by studio</span><span class="ccs" style="margin:0">Chelsea vs. Marylebone -- always shows both, ignores the studio toggle above. Welcome 3 has no studio breakdown (studio-agnostic by design)</span></div>
+    <div class="tscroll">
+      <table id="io-studio-table">
+        <thead><tr><th>Studio</th><th>Starters</th><th>Converted (membership)</th><th>Converted (pack)</th><th>Hopped</th><th>Casual Only</th><th>No Further</th><th>Converted within 30d</th></tr></thead>
+        <tbody id="io-studio-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="cc" style="margin-top:16px;margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Does showing up predict conversion?</div><div class="ccs" id="attendance-sub">Real check-in data, joined to lifetime outcomes. If "Both types" is selected above, this defaults to showing 1 Week Unlimited (the stronger, cleaner signal) -- switch the intro type dropdown to see Welcome 3's instead.</div></div></div>
+    <div class="mgrid" id="io-attendance-stats" style="margin-bottom:12px"></div>
+    <div class="h260"><canvas id="chartAttendanceConversion"></canvas></div>
+  </div>
+
+  <div class="cc">
+    <div class="cch"><div><div class="cct">Time to convert (membership)</div><div class="ccs" id="time-to-convert-sub">Days between the intro offer starting and the actual membership purchase</div></div></div>
+    <div class="h260"><canvas id="chartTimeToConvert"></canvas></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ INTRO OFFERS: SUMMER STRONG ══════════════════════ -->
+<div class="page" id="page-io-summerstrong">
+  <div class="ph"><div>
+    <h1>Summer <em>Strong</em></h1>
+    <div class="ph-sub">2 weeks unlimited, £150 -- a temporary promo, tracked separately from the main intro offer system. Always shows all history, no timeframe/studio filters (lighter, standalone scope).</div>
+  </div></div>
+
+  <div class="mgrid" id="ss-metrics" style="margin-bottom:16px"></div>
+
+  <div class="tc">
+    <div class="tch"><span class="tct">Performance by studio</span></div>
+    <div class="tscroll">
+      <table id="ss-performance-table">
+        <thead><tr><th>Studio</th><th>Converted (membership)</th><th>Converted (pack)</th><th>Repeated Summer Strong</th><th>Casual Only</th><th>Pending</th><th>No Further</th><th>Total</th></tr></thead>
+        <tbody id="ss-performance-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="cc" style="margin-top:16px">
+    <div class="cch"><div><div class="cct">Summer Strong -- expiring &amp; outreach</div><div class="ccs">Assumes a 14-day (2-week) window from start date -- not validated against Mariana Tek's own commitment field, since this is a new, fixed-length promo. Flag if this looks off once real data is in. Aggregate counts only, no names.</div></div></div>
+    <div class="mgrid" id="ss-expiring-metrics" style="margin-bottom:12px"></div>
+    <div class="tscroll">
+      <table id="ss-expiring-table">
+        <thead><tr><th>Studio</th><th>Tag</th><th>Count</th><th>Avg Days Until Expiration</th></tr></thead>
+        <tbody id="ss-expiring-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="page-io-definitions">
+  <div class="ph"><div>
+    <h1>Intro Offers: Definitions &amp; <em>Methodology</em></h1>
+    <div class="ph-sub">How every number on the Intro Offers page is calculated</div>
+  </div></div>
+
+  <div class="legend">
+    <div class="legend-grid">
+      <dl>
+        <dt>What "intro offer started" means -- purchase date, not first check-in</dt>
+        <dd>The timeframe/date filter is based on when someone PURCHASED their intro offer (1 Week Unlimited membership, or Welcome 3 credits), not when they first attended a class. Someone could buy on a Monday and not actually check in until Wednesday -- the "start" date used everywhere on this page is the Monday purchase, not the Wednesday check-in.</dd>
+
+        <dt>What "timeframe" filters on</dt>
+        <dd>Filters by when the intro offer STARTED (purchase date), not when someone converted. So "28D" means "people who purchased an intro offer in the last 28 days" -- their eventual outcome is tracked however long it actually took, even beyond the 28-day window. This is exactly why very recent starters need the "Pending" category below, rather than being counted as a definitive "No Further Purchase."</dd>
+
+        <dt>"Hopped" (Tried Another Intro Offer)</dt>
+        <dd>Someone who, instead of converting, went and tried the OTHER intro offer product -- e.g. did Welcome 3, then later tried 1 Week Unlimited -- without ever buying a real membership or a 5+ credit/class pack.</dd>
+
+        <dt>"Pending (recent, no outcome yet)"</dt>
+        <dd>Anyone whose intro offer started within the last 30 days AND who hasn't converted, hopped, or made a casual repeat purchase yet is shown as "Pending," not "No Further Purchase." They simply haven't had enough time to show their true outcome -- lumping them in with genuine non-converters would understate the real conversion rate for recent cohorts. After 30 days with no further activity, they're counted as a real "No Further Purchase."</dd>
+
+        <dt>"Converted" (lifetime outcome)</dt>
+        <dd>Not just their very next purchase -- tracks forward however long it takes, using real purchase dates. Someone who took 4 months to buy a membership still counts as converted. We do NOT wait for someone's intro offer "period" to technically finish (e.g. the 1-week window ending) before checking their outcome -- any real subsequent purchase counts immediately, whenever it happens.</dd>
+      </dl>
+      <dl>
+        <dt>Outcome classification (priority order, mutually exclusive)</dt>
+        <dd>1) Converted to Membership -- ever bought a real recurring membership. 2) Converted to Pack -- ever bought a 5+ credit/class pack (checked only if not a membership conversion). 3) Tried Another Intro Offer -- bought the OTHER intro offer without ever converting. 4) Casual Re-engagement Only -- bought something again (drop-ins, small packs) but never converted or hopped. 5) Pending or No Further Purchase -- see above.</dd>
+
+        <dt>Converted within 7/30/90 days</dt>
+        <dd>Cumulative % of CONVERTERS (not all starters) who converted within that many days of their own intro offer starting -- not a calendar date. Chosen over a single raw "median days" figure since a normalized rate is easier to compare across different time periods and between the two intro offer types. The Time to Convert chart itself is also shown as a % of converters per bucket, for the same reason.</dd>
+
+        <dt>Studio filtering</dt>
+        <dd>Only meaningfully applies to "1 Week Unlimited" (a membership, with real purchase-location data). "Welcome 3" is a credit product usable at any studio, so it's always "All Studios" by design -- not a data gap. Picking a specific studio will naturally show 0 Welcome 3 starters, which is expected.</dd>
+
+        <dt>Head-to-head &amp; studio comparison tables</dt>
+        <dd>These deliberately ignore certain page-level toggles so they can always show a real side-by-side comparison: the head-to-head table ignores the intro-type dropdown (it needs both to compare), and the studio table ignores the studio toggle (it always shows Chelsea vs. Marylebone together). Both still respect the timeframe.</dd>
+
+        <dt class="caveat">Caveat: Welcome 3 attendance data is ~95% complete</dt>
+        <dd>Real check-ins are matched via credit_id=2356, which covers the large majority of real Welcome 3 purchases. A small number of edge-case purchases under different internal credit IDs, and any complimentary/comped intro credits, are not included in attendance figures.</dd>
+
+        <dt class="caveat">Caveat: "days between visits" is all-time only</dt>
+        <dd>Unlike everything else on this page, average/median days between visits cannot currently be filtered by timeframe/studio -- it's calculated from visit-to-visit gaps, which live at a different level of detail than the per-starter data everything else here recomputes from live.</dd>
+
+        <dt>Expiring &amp; expired widget -- a deliberately separate system</dt>
+        <dd>This widget uses Mariana Tek's own pre-built "Expiring Intro Offer" reports and its "Conversion Purchase" field -- NOT our own lifetime-outcome classification used everywhere else on this page. "Expiring soon" = ≤3 days left (both offer types). "Low usage" (Welcome 3 only) = 1 or fewer classes remaining, regardless of time left -- a fast-finisher who burns through all 3 classes in 2 days is a hotter lead than a simple time-based nudge. "Recently expired" is capped at the last 30 days -- a safety net for the gap between weekly outreach runs, not an all-time backlog. Anyone who never activated their offer (no classes taken yet) is excluded entirely -- that's a separate workflow. This widget shows aggregate counts only; the real client-level outreach list (with names) is generated by a separate, existing weekly automation the team already uses.</dd>
+
+        <dt>Summer Strong -- standalone, separate from everything above</dt>
+        <dd>A temporary 2-week-unlimited, £150 promo, deliberately kept OUT of the main 1 Week Unlimited/Welcome 3 system rather than integrated as a permanent third intro type. Reuses the same purchase-timeline data (no extra pull needed), but with its own outcome categories -- including "Repeated Summer Strong," since buying the same promo again isn't a real conversion. Expiration is assumed to be 14 days after the start date -- this has NOT been validated against Mariana Tek's own commitment-length field, since it's a brand-new, fixed-length product rather than the usual 6-month renewing commitment. If the expiring/outreach numbers look wrong once real data comes in, this assumption is the first place to check. No timeframe/studio filters -- always shows full history, aggregate counts only, no names.
+        <br><br>
+        <strong>Also excluded from Membership Health entirely</strong> (same treatment as 1 Week Unlimited, for the same reason): counting a guaranteed 2-week product as a normal membership would create a fake "cancellation" for every single signup exactly 2 weeks later, inflating churn rate and polluting cancellation-reason stats with an event that isn't real dissatisfaction. "Revenue collected" above is an estimate (starters × £150 flat price), not a real per-transaction pull -- it won't reflect any discounts or refunds on individual purchases.</dd>
+      </dl>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ CLASS PERFORMANCE: OVERVIEW ══════════════════════ -->
+<div class="page" id="page-cp-overview">
+  <div class="ph"><div>
+    <h1>Class Performance <em>Overview</em></h1>
+    <div class="ph-sub">Enmei · class utilization &amp; cancellations · Full Body and Recovery — Compression Boots excluded (not coach-led classes)</div>
+  </div></div>
+
+  <div class="ytabs" id="studio-tabs-cp" style="margin-bottom:16px">
+    <button class="ytab active" onclick="setStudio('cp','all',this)">All Studios</button>
+  </div>
+
+  <div style="margin-bottom:16px">
+    <div class="ytabs" id="tf-tabs-cp">
+      <button class="ytab active" onclick="setTimeframe('cp','28d',this)">28D</button>
+      <button class="ytab" onclick="setTimeframe('cp','mtd',this)">MTD</button>
+      <button class="ytab" onclick="setTimeframe('cp','lastmonth',this)">Last Month</button>
+      <button class="ytab" onclick="setTimeframe('cp','ytd',this)">YTD</button>
+      <button class="ytab" onclick="setTimeframe('cp','12m',this)">12M</button>
+      <button class="ytab" onclick="setTimeframe('cp','alltime',this)">All time</button>
+      <button class="ytab" onclick="showCustomRange('cp',this)">Custom</button>
+    </div>
+    <div class="custom-range" id="custom-range-box-cp">
+      <input type="date" id="custom-start-cp">
+      <span style="color:var(--text3);font-size:12px">to</span>
+      <input type="date" id="custom-end-cp">
+      <button onclick="applyCustomRange('cp')">Apply</button>
+    </div>
+    <div style="margin-top:8px">
+      <button class="ytab" onclick="toggleCompareBox('cp')" style="background:var(--bg2);border:1px solid var(--border)">Compare to <span id="compare-toggle-arrow-cp" style="display:inline-block;transition:transform .15s">▶</span><span id="compare-mode-label-cp" style="color:var(--text3);margin-left:4px"></span></button>
+      <div id="compare-box-cp" style="display:none;margin-top:8px">
+        <div class="ytabs" id="compare-tabs-cp">
+          <button class="ytab active" onclick="setCompareMode('cp','none',this)">None</button>
+          <button class="ytab" onclick="setCompareMode('cp','previous_period',this)">Previous Period</button>
+          <button class="ytab" onclick="setCompareMode('cp','previous_month',this)">Previous Month</button>
+          <button class="ytab" onclick="setCompareMode('cp','last_year',this)">Same Period Last Year</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mgrid" id="cp-metrics"></div>
+
+  <div class="tc">
+    <div class="tch"><span class="tct">Studio comparison</span><span class="ccs" style="margin:0">Selected timeframe</span></div>
+    <div class="tscroll">
+      <table id="cp-studio-compare-table">
+        <thead><tr><th>Studio</th><th>Number of Classes</th><th>Classes Cancelled</th><th>Avg Utilization</th><th>Avg Paid Visit %</th></tr></thead>
+        <tbody id="cp-studio-compare-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch">
+      <div><div class="cct">Utilization heatmap</div><div class="ccs" id="cp-hm-sub">Day of week × class time, selected studio/timeframe</div></div>
+      <div class="coach-select-wrap">
+        <select id="cp-hm-metric" onchange="renderClassPerformance()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:6px;padding:5px 9px;font-size:11.5px">
+          <option value="util">% Utilization</option>
+          <option value="paid">% Paid Visits</option>
+          <option value="count">Class Count</option>
+        </select>
+      </div>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-switch" id="cp-compare-toggle" onclick="toggleStudioCompareHeatmap()"><div class="knob"></div></div>
+      <span class="toggle-label">Compare studios side-by-side</span>
+    </div>
+
+    <div id="cp-hm-single">
+      <div class="hm-wrap"><div id="cp-heatmap-single"></div></div>
+    </div>
+    <div id="cp-hm-compare" style="display:none">
+      <div class="coach-select-wrap" id="cp-hm-studio-checks" style="margin-bottom:10px"></div>
+      <div class="cp-compare-grid" id="cp-compare-grid"></div>
+    </div>
+    <div class="hm-legend">
+      <span>Low</span>
+      <div class="hm-legend-scale" id="cp-hm-legend-scale"></div>
+      <span>High</span>
+    </div>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Performance flags</div><div class="ccs">Day/time slots at least 12 points above or below the "Avg utilization" number shown above (same studio &amp; timeframe). Trend compares the first half of the selected period to the second half. Needs at least 3 classes in a slot to flag it -- too little data otherwise to trust.</div></div></div>
+    <div class="cr cr2">
+      <div>
+        <div class="ccs" style="margin-bottom:6px">Underperforming</div>
+        <div class="momentum-list" id="cp-flags-under"></div>
+      </div>
+      <div>
+        <div class="ccs" style="margin-bottom:6px">Performing exceptionally</div>
+        <div class="momentum-list" id="cp-flags-over"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Classes &amp; utilization over time</div><div class="ccs">Weekly, selected studio · the most recent week is likely partial (still in progress), so its average can look skewed by just a day or two of classes</div></div></div>
+    <div class="h260"><canvas id="chartClassHistory"></canvas></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ CLASS PERFORMANCE: COACH PERFORMANCE ══════════════════════ -->
+<div class="page" id="page-cp-coaches">
+  <div class="ph"><div>
+    <h1>Coach <em>Performance</em></h1>
+    <div class="ph-sub">Enmei · per-coach utilization, benchmarked against studio + time-slot average · excludes Full Body &amp; Recovery — Compression Boots</div>
+  </div></div>
+
+  <div class="ytabs" id="studio-tabs-cpc" style="margin-bottom:16px">
+    <button class="ytab active" onclick="setStudio('cpc','all',this)">All Studios (overall)</button>
+  </div>
+
+  <div style="margin-bottom:16px">
+    <div class="ytabs" id="tf-tabs-cpc">
+      <button class="ytab active" onclick="setTimeframe('cpc','28d',this)">28D</button>
+      <button class="ytab" onclick="setTimeframe('cpc','mtd',this)">MTD</button>
+      <button class="ytab" onclick="setTimeframe('cpc','lastmonth',this)">Last Month</button>
+      <button class="ytab" onclick="setTimeframe('cpc','ytd',this)">YTD</button>
+      <button class="ytab" onclick="setTimeframe('cpc','12m',this)">12M</button>
+      <button class="ytab" onclick="setTimeframe('cpc','alltime',this)">All time</button>
+      <button class="ytab" onclick="showCustomRange('cpc',this)">Custom</button>
+    </div>
+    <div class="custom-range" id="custom-range-box-cpc">
+      <input type="date" id="custom-start-cpc">
+      <span style="color:var(--text3);font-size:12px">to</span>
+      <input type="date" id="custom-end-cpc">
+      <button onclick="applyCustomRange('cpc')">Apply</button>
+    </div>
+    <div style="margin-top:8px">
+      <button class="ytab" onclick="toggleCompareBox('cpc')" style="background:var(--bg2);border:1px solid var(--border)">Compare to <span id="compare-toggle-arrow-cpc" style="display:inline-block;transition:transform .15s">▶</span><span id="compare-mode-label-cpc" style="color:var(--text3);margin-left:4px"></span></button>
+      <div id="compare-box-cpc" style="display:none;margin-top:8px">
+        <div class="ytabs" id="compare-tabs-cpc">
+          <button class="ytab active" onclick="setCompareMode('cpc','none',this)">None</button>
+          <button class="ytab" onclick="setCompareMode('cpc','previous_period',this)">Previous Period</button>
+          <button class="ytab" onclick="setCompareMode('cpc','previous_month',this)">Previous Month</button>
+          <button class="ytab" onclick="setCompareMode('cpc','last_year',this)">Same Period Last Year</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Trending up &amp; down recently</div><div class="ccs">How full classes have been in the last 2 weeks vs. the last 8 weeks, per coach. Always uses this fixed window — doesn't change with the timeframe filter above.</div></div></div>
+    <div class="cr cr2">
+      <div>
+        <div class="ccs" style="margin-bottom:6px">Rising</div>
+        <div class="momentum-list" id="momentum-up"></div>
+      </div>
+      <div>
+        <div class="ccs" style="margin-bottom:6px">Falling</div>
+        <div class="momentum-list" id="momentum-down"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tc">
+    <div class="tch"><span class="tct">Coach scorecard</span><span class="ccs" style="margin:0">Lift = actual vs. average for that studio + time slot, over the selected timeframe</span></div>
+    <div class="tscroll">
+      <table id="cp-coach-table">
+        <thead><tr><th>Coach</th><th>Studio</th><th>Classes Taught</th><th>Avg Utilization</th><th>Avg Paid Visit %</th><th>Utilization Lift</th><th>% Classes ≥80%</th></tr></thead>
+        <tbody id="cp-coach-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ CLASS PERFORMANCE: DEFINITIONS ══════════════════════ -->
+<div class="page" id="page-cp-definitions">
+  <div class="ph"><div>
+    <h1>Class Performance <em>Definitions &amp; Methodology</em></h1>
+    <div class="ph-sub">Enmei · how these numbers are built</div>
+  </div></div>
+
+  <div class="legend">
+    <div class="legend-grid">
+      <dl>
+        <dt>Data sources</dt>
+        <dd>Class-level utilization comes from Mariana Tek's "Class Session Utilization Details" report (report 294) — one row per class that actually took place. Cancelled classes come from a <strong>separate</strong> pull of the class_sessions endpoint, filtered to a non-null cancellation timestamp. These two sources are deliberately NOT joined or reconciled — confirmed during build that cancelled classes never appear in report 294 at all, so "classes held" and "classes cancelled" are two independent counts, not complementary halves of one number.</dd>
+
+        <dt>Excluded from all figures</dt>
+        <dd>"Full Body" (a training session, not a coach-led class — confirmed to always have no instructor logged) and "Recovery — Compression Boots" (a perk, not a real class — identified by name rather than a reliable data flag, since roughly a quarter of these rows do have an instructor logged, so a null-instructor rule alone wouldn't catch it cleanly). Both are excluded from class counts, utilization averages, and the coach scorecard.</dd>
+
+        <dt>Admin Holds</dt>
+        <dd>Counted as a paid visit within "% Paid Visits" — these are mainly private classes where staff manually hold spots. This is validated but genuinely rare (a handful of real occurrences found across two months of data), so it won't move headline numbers much, but is accurate on the classes where it applies. "Unavailable Holds" (e.g. broken equipment) are deliberately NOT counted — that's lost capacity, not a paid visit.</dd>
+
+        <dt>Data quality flag: unassigned instructor</dt>
+        <dd>A class with no instructor logged that ISN'T Full Body or Recovery is flagged as a genuine data gap (a missed instructor assignment), not silently excluded. These classes are dropped from the coach scorecard (there's no one to attribute them to) but still count toward total classes held.</dd>
+      </dl>
+      <dl>
+        <dt>Utilization heatmap</dt>
+        <dd>Groups classes by class start time (rows) × day of week (columns), averaging the selected metric (% Utilization, % Paid Visits, or raw class count) across the selected studio and timeframe. Color scale is fixed 0–100%, recalibrated so a strong class (80%+) reads as visually "hot" rather than saving full intensity only for values near 100% — comparable across studios and across the multi-studio comparison view, which supports any number of studios (not capped at two).</dd>
+
+        <dt>Performance flags</dt>
+        <dd>Flags a day/time slot as underperforming or exceptional when it's at least 12 points away from the "Avg utilization" figure shown at the top of the page — the same overall average, for the same selected studio &amp; timeframe. Points here means percentage points: 65% vs. 40% is a 25-point gap, not a "25% change." Only flags once a slot has had at least 3 classes in the period, so one unusually quiet or busy day doesn't get treated as a pattern. The trend compares the first half of the selected period to the second half (needs at least 2 classes in each half to say anything) — this respects whatever timeframe toggle is selected, unlike Momentum below, which is intentionally fixed.</dd>
+
+        <dt>Coach scorecard &amp; utilization lift</dt>
+        <dd>"Lift" compares a coach's actual utilization on a given class to the average utilization for that exact studio + time slot, over the same selected timeframe — so a coach's 7am class is judged against other 7am classes, not against a busier evening slot. A class co-taught by more than one instructor counts fully toward each instructor's numbers, not split between them.</dd>
+
+        <dt>Momentum (rising/falling)</dt>
+        <dd>Unlike the rest of this section, the Momentum leaderboard uses a <em>fixed</em> 14-day vs. 56-day utilization lift comparison, recomputed daily by the data pipeline — it does NOT follow the timeframe toggle on the Coach Performance page. This is intentional: momentum is meant to answer "who's trending up or down recently," which needs a fixed short-vs-long window, not an arbitrary date range.</dd>
+
+        <dt class="caveat">Known gaps</dt>
+        <dd class="caveat">Shoreditch is not yet open, so it will show no data here. Cancelled classes cannot currently be attributed to a specific instructor — the class_sessions data for a cancelled class does not reliably include who was scheduled to teach it — so cancellations appear only as studio-level totals, not on the coach scorecard. Performance flags need at least 3 classes in a slot before flagging it, so a brand-new class or timeframe with sparse data may show fewer flags than you'd expect — that's the sample-size guard working as intended, not a bug.</dd>
+      </dl>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════ SOON ══════════════════════ -->
+<div class="page" id="page-soon">
+  <div class="soon-box">
+    <h2>Coming soon</h2>
+    <p>This section is planned but not yet built. Membership Health is live — more sections will be added the same way, one at a time.</p>
+  </div>
+</div>
+
+</main>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════════════════════════════════════
+function goTo(pageName, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + pageName).classList.add('active');
+  document.querySelectorAll('.ni').forEach(n => n.classList.remove('active'));
+  btn.classList.add('active');
+  if (pageName === 'mh-overview') renderOverview();
+  if (pageName === 'mh-revenue') renderRevenue();
+  if (pageName === 'mh-churn-overview') renderChurnOverview();
+  if (pageName === 'mh-churn-atrisk') renderChurnAtRisk();
+  if (pageName === 'mh-churn-deepdive') renderChurnDeepDive();
+  if (pageName === 'io-overview') renderIntroOffersOverview();
+  if (pageName === 'io-expiring') renderIntroExpiring();
+  if (pageName === 'io-comparison') renderIntroComparison();
+  if (pageName === 'io-summerstrong') renderSummerStrong();
+  if (pageName === 'cp-overview') renderClassPerformance();
+  if (pageName === 'cp-coaches') renderCoachPerformance();
+}
+function toggleGroup(groupName) {
+  document.getElementById('group-' + groupName).classList.toggle('open');
+}
+function toggleTableDetail() {
+  const body = document.getElementById('table-detail-body');
+  const arrow = document.getElementById('table-toggle-arrow');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+}
+function exportTermEndCSV() {
+  const rows = getNearingTermRows('car');
+  const header = ['customer_id', 'membership_id', 'studio', 'tier', 'membership_name', 'term_end_date'];
+  const csvLines = [header.join(',')];
+  rows.forEach(r => csvLines.push([r.customer_id, r.membership_id, r.studio, r.tier, r.membership_name, r.term_end_date].join(',')));
+  const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `nearing_term_end_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function toggleRiskDetail() {
+  const body = document.getElementById('risk-detail-body');
+  const arrow = document.getElementById('risk-toggle-arrow');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+}
+function getPaymentRiskRows() {
+  const filtered = applyCommonFilters('rev', CUSTOMER_LOG_ROWS);
+  return filtered.filter(r => r.status === 'payment_failure' || r.status === 'ding_failure');
+}
+function exportRiskCSV() {
+  const rows = getPaymentRiskRows();
+  const header = ['customer_id', 'membership_id', 'studio', 'tier', 'membership_name', 'status', 'renewal_rate'];
+  const csvLines = [header.join(',')];
+  rows.forEach(r => csvLines.push([r.customer_id, r.membership_id, r.studio, r.tier, r.membership_name, r.status, r.renewal_rate].join(',')));
+  const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `payment_risk_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ════════════════════════════════════════════════════════════════
+// GVIZ FETCH
+// ════════════════════════════════════════════════════════════════
+async function fetchSheet(tabName) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&headers=1&sheet=${encodeURIComponent(tabName)}`;
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (netErr) {
+    if (window.location.protocol === 'file:') throw new Error('Local file:// cannot fetch Google Sheets. Host this file (GitHub Pages, Netlify, etc.).');
+    throw new Error(`Network error fetching ${tabName}: ${netErr.message}`);
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status} for tab "${tabName}".`);
+  const text = await res.text();
+  if (text.includes('accounts.google.com') || text.includes('ServiceLogin')) throw new Error('Sheet is not public.');
+  const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/);
+  if (!match) throw new Error(`Unexpected response for tab "${tabName}".`);
+  return JSON.parse(match[1]).table;
+}
+function parseGvizTable(table) {
+  if (!table || !table.cols || !table.rows) return [];
+  const labels = table.cols.map(c => c.label || c.id);
+  return table.rows.map(row => {
+    const obj = {};
+    labels.forEach((label, i) => { const cell = row.c[i]; obj[label] = cell ? cell.v : null; });
+    return obj;
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════════════
+const fK = v => v == null ? '—' : '£' + (Math.round(v/100)/10).toFixed(1) + 'k';
+const fPct = v => v == null || !isFinite(v) ? '—' : (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+const C = { enmei: '#e8442a', teal: '#2dd4bf', slate: '#7c93c9', neg: '#e0625a', text2: '#9b9690', grid: 'rgba(255,255,255,0.05)' };
+const xsc = () => ({ ticks: { color: C.text2, font: { size: 11 } }, grid: { display: false } });
+const ysc = () => ({ ticks: { color: C.text2, font: { size: 11 }, precision: 0 }, grid: { color: C.grid } });
+const yscCurrency = () => ({ ticks: { color: C.text2, font: { size: 11 }, callback: v => '£' + v.toLocaleString() }, grid: { color: C.grid } });
+const charts = {};
+function mk(id, cfg) { if (charts[id]) charts[id].destroy(); charts[id] = new Chart(document.getElementById(id), cfg); }
+function toISO(d) { return d.toISOString().slice(0, 10); }
+
+// ════════════════════════════════════════════════════════════════
+// PER-PAGE STATE
+// pages: ov (Overview), rev (Revenue), ch (Churn & Retention), comp (Composition)
+// ════════════════════════════════════════════════════════════════
+let HISTORY_ROWS = [], LIVE_ROWS = [], AGE_PYRAMID_ROWS = [], CUSTOMER_LOG_ROWS = [], ALL_STUDIOS = [];
+let IO_LIVE_ROWS = [], IO_HISTORY_ROWS = [], IO_FLOW_ROWS = [], IO_ATTENDANCE_ROWS = [], IO_STARTER_ROWS = [], IO_EXPIRING_ROWS = [], IO_ALL_STUDIOS = [];
+let SS_PERFORMANCE_ROWS = [], SS_EXPIRING_ROWS = [];
+let CP_SESSION_ROWS = [], CP_HISTORY_ROWS = [], CP_COACH_ROWS = [], CP_CANCEL_ROWS = [], CP_ALL_STUDIOS = [];
+
+const PAGES = {
+  ov: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
+  rev: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
+  cho: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
+  car: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
+  cdd: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
+  io: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
+  ioe: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
+  ioc: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
+  cp: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
+  cpc: { studio: 'all', tier: 'all', timeframe: '28d', customRange: null },
+};
+let COMPARE_MODES = { ov: 'none', cho: 'none', cdd: 'none', cp: 'none', cpc: 'none' };
+
+const LIVE_STATUS_COLS = ['active','frozen','cancelled','terminated','payment_failure','ding_failure','done','pending_customer_activation','pending_start_date','converted'];
+const MIX_STATUS_COLS = LIVE_STATUS_COLS.filter(s => !['cancelled', 'done', 'terminated'].includes(s));
+const TF_LABELS = { '28d': '28D', 'mtd': 'MTD', 'lastmonth': 'Last Month', 'ytd': 'YTD', '12m': '12M', 'alltime': 'All time', 'custom': 'Custom' };
+const COMPARE_LABELS = { none: '', previous_period: '(Previous Period)', previous_month: '(Previous Month)', last_year: '(Same Period Last Year)' };
+const AGE_BUCKET_ORDER = ["0-30 days","30-60 days","60-90 days","3-6 months","6-12 months","12-24 months","24+ months"];
+
+function setStudio(page, studio, btn) {
+  PAGES[page].studio = studio;
+  document.querySelectorAll(`#studio-tabs-${page} .ytab`).forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderPage(page);
+}
+function setTimeframe(page, mode, btn) {
+  PAGES[page].timeframe = mode;
+  PAGES[page].customRange = null;
+  document.querySelectorAll(`#tf-tabs-${page} .ytab`).forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`custom-range-box-${page}`).classList.remove('show');
+  renderPage(page);
+}
+function showCustomRange(page, btn) {
+  document.querySelectorAll(`#tf-tabs-${page} .ytab`).forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`custom-range-box-${page}`).classList.add('show');
+}
+function applyCustomRange(page) {
+  const start = document.getElementById(`custom-start-${page}`).value;
+  const end = document.getElementById(`custom-end-${page}`).value;
+  if (!start || !end) return;
+  PAGES[page].customRange = { start, end };
+  PAGES[page].timeframe = 'custom';
+  renderPage(page);
+}
+function setCompareMode(page, mode, btn) {
+  COMPARE_MODES[page] = mode;
+  document.querySelectorAll(`#compare-tabs-${page} .ytab`).forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`compare-mode-label-${page}`).textContent = COMPARE_LABELS[mode];
+  renderPage(page);
+}
+function toggleCompareBox(page) {
+  const box = document.getElementById(`compare-box-${page}`);
+  const arrow = document.getElementById(`compare-toggle-arrow-${page}`);
+  const isOpen = box.style.display !== 'none';
+  box.style.display = isOpen ? 'none' : 'block';
+  arrow.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+}
+
+function renderPage(page) {
+  if (page === 'ov') renderOverview();
+  if (page === 'rev') renderRevenue();
+  if (page === 'cho') renderChurnOverview();
+  if (page === 'car') renderChurnAtRisk();
+  if (page === 'cdd') renderChurnDeepDive();
+  if (page === 'io') renderIntroOffersOverview();
+  if (page === 'ioe') renderIntroExpiring();
+  if (page === 'ioc') renderIntroComparison();
+  if (page === 'cp') renderClassPerformance();
+  if (page === 'cpc') renderCoachPerformance();
+}
+
+function populateFilters() {
+  ALL_STUDIOS = Array.from(new Set(HISTORY_ROWS.map(r => r.studio).filter(Boolean))).sort();
+  const tiers = Array.from(new Set(HISTORY_ROWS.map(r => r.tier).filter(Boolean))).sort();
+
+  ['ov', 'rev', 'cho', 'car', 'cdd'].forEach(page => {
+    const studioTabs = document.getElementById(`studio-tabs-${page}`);
+    ALL_STUDIOS.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'ytab';
+      btn.textContent = s;
+      btn.onclick = () => setStudio(page, s, btn);
+      studioTabs.appendChild(btn);
+    });
+    const tierSel = document.getElementById(`f-tier-${page}`);
+    tiers.forEach(t => tierSel.insertAdjacentHTML('beforeend', `<option value="${t}">${t}</option>`));
+    tierSel.addEventListener('change', () => { PAGES[page].tier = tierSel.value; renderPage(page); });
+  });
+
+  // Intro Offers studio tabs -- only real studios that appear for
+  // "1 Week Unlimited" (Welcome 3 is always "All Studios"). Each of the
+  // three pages gets its own tab set and its own intro-type dropdown --
+  // independent filter state per page, same convention as everywhere
+  // else on this dashboard.
+  IO_ALL_STUDIOS = Array.from(new Set(IO_HISTORY_ROWS.map(r => r.studio).filter(s => s && s !== 'All Studios'))).sort();
+  ['io', 'ioe', 'ioc'].forEach(page => {
+    const tabs = document.getElementById(`studio-tabs-${page}`);
+    IO_ALL_STUDIOS.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'ytab';
+      btn.textContent = s;
+      btn.onclick = () => setStudio(page, s, btn);
+      tabs.appendChild(btn);
+    });
+  });
+  document.getElementById('f-intro-type-io').addEventListener('change', renderIntroOffersOverview);
+  document.getElementById('f-intro-type-ioe').addEventListener('change', renderIntroExpiring);
+  document.getElementById('f-intro-type-ioc').addEventListener('change', renderIntroComparison);
+  document.getElementById('f-expiring-view').addEventListener('change', renderIntroExpiring);
+
+  // Class Performance studio tabs -- sourced from real Location values on
+  // the session-level tab (this is where Shoreditch will show up
+  // automatically once it opens, no code change needed).
+  CP_ALL_STUDIOS = Array.from(new Set(CP_SESSION_ROWS.map(r => r.Location).filter(Boolean))).sort();
+  ['cp', 'cpc'].forEach(page => {
+    const tabs = document.getElementById(`studio-tabs-${page}`);
+    CP_ALL_STUDIOS.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'ytab';
+      btn.textContent = s;
+      btn.onclick = () => setStudio(page, s, btn);
+      tabs.appendChild(btn);
+    });
+  });
+  // Multi-studio compare checkboxes -- built dynamically so this keeps
+  // working with no code change whenever a new studio (Shoreditch,
+  // future locations) comes online. Defaults to the first two checked.
+  const checksWrap = document.getElementById('cp-hm-studio-checks');
+  CP_ALL_STUDIOS.forEach((s, i) => {
+    const label = document.createElement('label');
+    label.className = 'cp-studio-check';
+    label.innerHTML = `<input type="checkbox" value="${s}" ${i < 2 ? 'checked' : ''} onchange="renderClassPerformance()"> ${s}`;
+    checksWrap.appendChild(label);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+// DATE BOUNDS / FILTERING (parameterized by page)
+// ════════════════════════════════════════════════════════════════
+function getDateBounds(page) {
+  const st = PAGES[page];
+  if (st.customRange) return { start: st.customRange.start, end: st.customRange.end };
+  const today = new Date();
+  const end = toISO(today);
+  if (st.timeframe === '28d') { const start = new Date(today); start.setDate(start.getDate() - 28); return { start: toISO(start), end }; }
+  if (st.timeframe === 'mtd') { const start = new Date(today.getFullYear(), today.getMonth(), 1); return { start: toISO(start), end }; }
+  if (st.timeframe === 'lastmonth') {
+    const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastDay = new Date(today.getFullYear(), today.getMonth(), 0);
+    return { start: toISO(start), end: toISO(lastDay) };
+  }
+  if (st.timeframe === 'ytd') { const start = new Date(today.getFullYear(), 0, 1); return { start: toISO(start), end }; }
+  if (st.timeframe === '12m') { const start = new Date(today); start.setDate(start.getDate() - 365); return { start: toISO(start), end }; }
+  return { start: '2000-01-01', end };
+}
+
+function getComparisonBounds(page) {
+  if (COMPARE_MODES[page] === 'none') return null;
+  const { start, end } = getDateBounds(page);
+  const startDate = new Date(start), endDate = new Date(end);
+  if (COMPARE_MODES[page] === 'previous_period') {
+    const durationMs = endDate - startDate;
+    const newEnd = new Date(startDate); newEnd.setDate(newEnd.getDate() - 1);
+    const newStart = new Date(newEnd.getTime() - durationMs);
+    return { start: toISO(newStart), end: toISO(newEnd) };
+  }
+  if (COMPARE_MODES[page] === 'previous_month') {
+    const newStart = new Date(startDate); newStart.setMonth(newStart.getMonth() - 1);
+    const newEnd = new Date(endDate); newEnd.setMonth(newEnd.getMonth() - 1);
+    return { start: toISO(newStart), end: toISO(newEnd) };
+  }
+  if (COMPARE_MODES[page] === 'last_year') {
+    const newStart = new Date(startDate); newStart.setFullYear(newStart.getFullYear() - 1);
+    const newEnd = new Date(endDate); newEnd.setFullYear(newEnd.getFullYear() - 1);
+    return { start: toISO(newStart), end: toISO(newEnd) };
+  }
+  return null;
+}
+
+function applyCommonFilters(page, rows) {
+  const st = PAGES[page];
+  return rows.filter(r => {
+    if (st.studio !== 'all' && r.studio !== st.studio) return false;
+    if (st.tier !== 'all' && r.tier !== st.tier) return false;
+    return true;
+  });
+}
+function getHistoryRows(page) {
+  const filtered = applyCommonFilters(page, HISTORY_ROWS);
+  const { start, end } = getDateBounds(page);
+  return filtered.filter(r => r.week >= start && r.week <= end);
+}
+function getComparisonHistoryRows(page) {
+  const bounds = getComparisonBounds(page);
+  if (!bounds) return [];
+  const filtered = applyCommonFilters(page, HISTORY_ROWS);
+  return filtered.filter(r => r.week >= bounds.start && r.week <= bounds.end);
+}
+function getLiveRows(page) {
+  return applyCommonFilters(page, LIVE_ROWS);
+}
+function getNearingTermRows(page) {
+  const today = new Date();
+  const in30 = new Date(today); in30.setDate(in30.getDate() + 30);
+  const filtered = applyCommonFilters(page, CUSTOMER_LOG_ROWS);
+  return filtered.filter(r => {
+    if (r.status !== 'active') return false;
+    if (!r.term_end_date) return false;
+    const termEnd = new Date(r.term_end_date);
+    return termEnd >= today && termEnd <= in30;
+  });
+}
+function getStudioComparisonData() {
+  const { start, end } = getDateBounds('ov');
+  return ALL_STUDIOS.map(studio => {
+    const historyForStudio = HISTORY_ROWS.filter(r => r.studio === studio && (PAGES.ov.tier === 'all' || r.tier === PAGES.ov.tier) && r.week >= start && r.week <= end);
+    const liveForStudio = LIVE_ROWS.filter(r => r.studio === studio && (PAGES.ov.tier === 'all' || r.tier === PAGES.ov.tier));
+    const weeklyForStudio = aggregateByWeek(historyForStudio);
+    const ongoingStartS = weeklyForStudio.length ? weeklyForStudio[0].active_count : null;
+    const ongoingEndS = weeklyForStudio.length ? weeklyForStudio[weeklyForStudio.length - 1].active_count : null;
+    const growthPctS = (weeklyForStudio.length >= 2 && ongoingStartS > 0) ? ((ongoingEndS - ongoingStartS) / ongoingStartS) * 100 : null;
+    const totalCancelledS = weeklyForStudio.reduce((s, w) => s + w.cancelled_count, 0);
+    const churnPctS = (ongoingStartS > 0) ? (totalCancelledS / ongoingStartS) * 100 : null;
+    const mrrS = liveForStudio.reduce((s, r) => s + (Number(r.active_revenue) || 0), 0);
+    const frozenS = liveForStudio.reduce((s, r) => s + (Number(r.frozen) || 0), 0);
+    return { studio, weekly: weeklyForStudio, ongoingEnd: ongoingEndS, mrr: mrrS, growthPct: growthPctS, churnPct: churnPctS, cancelled: totalCancelledS, frozen: frozenS };
+  });
+}
+
+function aggregateByWeek(rows) {
+  const byWeek = new Map();
+  for (const row of rows) {
+    const key = row.week;
+    if (!byWeek.has(key)) byWeek.set(key, { week: key, active_count: 0, new_count: 0, cancelled_count: 0, frozen_count: 0, revenue: 0 });
+    const e = byWeek.get(key);
+    e.active_count += Number(row.active_count) || 0;
+    e.new_count += Number(row.new_count) || 0;
+    e.cancelled_count += Number(row.cancelled_count) || 0;
+    e.frozen_count += Number(row.frozen_count) || 0;
+    e.revenue += Number(row.revenue) || 0;
+  }
+  return Array.from(byWeek.values()).sort((a, b) => a.week.localeCompare(b.week));
+}
+// Churn rate as a single ratio (cancelled-in-range / active-at-start-of-range)
+// breaks down for long lookbacks -- the starting denominator can be tiny
+// (e.g. early in the business) while cancellations accumulate from many
+// different people who joined later, producing nonsense numbers like 173%.
+// Instead: average each week's OWN churn rate (that week's cancellations /
+// that week's active count) across the range -- this stays properly
+// bounded no matter how long a lookback you pick.
+function averageWeeklyChurnRate(weekly) {
+  const rates = weekly.filter(w => w.active_count > 0).map(w => (w.cancelled_count / w.active_count) * 100);
+  if (rates.length === 0) return null;
+  return rates.reduce((a, b) => a + b, 0) / rates.length;
+}
+function revenueByGroup(rows, groupField) {
+  const byGroup = new Map();
+  for (const row of rows) {
+    const key = row[groupField] || 'Unknown';
+    if (!byGroup.has(key)) byGroup.set(key, 0);
+    byGroup.set(key, byGroup.get(key) + (Number(row.active_revenue) || 0));
+  }
+  return Array.from(byGroup.entries()).map(([group, revenue]) => ({ group, revenue })).sort((a, b) => b.revenue - a.revenue);
+}
+function statusMix(rows) {
+  const totals = {};
+  MIX_STATUS_COLS.forEach(s => totals[s] = 0);
+  for (const row of rows) MIX_STATUS_COLS.forEach(s => totals[s] += (Number(row[s]) || 0));
+  return MIX_STATUS_COLS.map(s => ({ status: s, count: totals[s] })).filter(d => d.count > 0);
+}
+
+// ════════════════════════════════════════════════════════════════
+// RENDER: OVERVIEW
+// ════════════════════════════════════════════════════════════════
+function renderOverview() {
+  const historyRows = getHistoryRows('ov');
+  const liveRows = getLiveRows('ov');
+  const weekly = aggregateByWeek(historyRows);
+
+  const latestOngoing = weekly.length ? weekly[weekly.length - 1].active_count : 0;
+  const currentMRR = liveRows.reduce((s, r) => s + (Number(r.active_revenue) || 0), 0);
+  const currentFrozen = liveRows.reduce((s, r) => s + (Number(r.frozen) || 0), 0);
+  const ongoingStart = weekly.length ? weekly[0].active_count : null;
+  const ongoingEnd = weekly.length ? weekly[weekly.length - 1].active_count : null;
+  const growthPct = (weekly.length >= 2 && ongoingStart > 0) ? ((ongoingEnd - ongoingStart) / ongoingStart) * 100 : null;
+  const totalNewInPeriod = weekly.reduce((s, w) => s + w.new_count, 0);
+  const totalCancelledInPeriod = weekly.reduce((s, w) => s + w.cancelled_count, 0);
+  const churnPct = averageWeeklyChurnRate(weekly);
+
+  const flagBanner = document.getElementById('churn-flag');
+  if (totalCancelledInPeriod > totalNewInPeriod && weekly.length > 0) {
+    flagBanner.classList.add('show');
+    document.getElementById('churn-flag-text').textContent = `Cancellations (${totalCancelledInPeriod}) exceeded new signups (${totalNewInPeriod}) over the selected time range.`;
+  } else flagBanner.classList.remove('show');
+
+  const freezeFlagBanner = document.getElementById('freeze-flag');
+  const frozenStart = weekly.length ? weekly[0].frozen_count : null;
+  const frozenEnd = weekly.length ? weekly[weekly.length - 1].frozen_count : null;
+  if (frozenStart != null && frozenEnd != null && frozenStart > 0 && (frozenEnd - frozenStart) / frozenStart >= 0.5 && (frozenEnd - frozenStart) >= 5) {
+    freezeFlagBanner.classList.add('show');
+    document.getElementById('freeze-flag-text').textContent = `Frozen memberships rose from ${frozenStart} to ${frozenEnd} over the selected time range -- worth understanding why.`;
+  } else freezeFlagBanner.classList.remove('show');
+
+  const heroEl = document.getElementById('growth-hero');
+  const ghValue = document.getElementById('gh-value');
+  const ghSub = document.getElementById('gh-sub');
+  const netChange = (ongoingEnd != null && ongoingStart != null) ? (ongoingEnd - ongoingStart) : null;
+  if (netChange == null) {
+    ghValue.textContent = '—'; ghSub.textContent = 'Not enough data in this range yet'; heroEl.classList.remove('neg');
+  } else {
+    const sign = netChange >= 0 ? '+' : '';
+    ghValue.textContent = `${sign}${netChange.toLocaleString()} members (${fPct(growthPct)})`;
+    ghValue.className = 'gh-value ' + (netChange >= 0 ? 'pos-text' : 'neg-text');
+    ghSub.textContent = `${ongoingStart.toLocaleString()} -> ${ongoingEnd.toLocaleString()} ongoing members over the selected range`;
+    heroEl.classList.toggle('neg', netChange < 0);
+  }
+
+  let compHtml = { ongoing: '', mrr: '', cancelled: '', growth: '', churn: '' };
+  if (COMPARE_MODES.ov !== 'none') {
+    const compWeekly = aggregateByWeek(getComparisonHistoryRows('ov'));
+    const compLabel = { previous_period: 'vs previous period', previous_month: 'vs previous month', last_year: 'vs same period last year' }[COMPARE_MODES.ov];
+    if (compWeekly.length > 0) {
+      const compOngoingStart = compWeekly[0].active_count;
+      const compOngoingEnd = compWeekly[compWeekly.length - 1].active_count;
+      const compRevenueEnd = compWeekly[compWeekly.length - 1].revenue;
+      const compTotalCancelled = compWeekly.reduce((s, w) => s + w.cancelled_count, 0);
+      const compGrowthPct = (compOngoingStart > 0) ? ((compOngoingEnd - compOngoingStart) / compOngoingStart) * 100 : null;
+      const compChurnPct = (compOngoingStart > 0) ? (compTotalCancelled / compOngoingStart) * 100 : null;
+      const pctChange = (curr, prev) => (prev != null && prev !== 0) ? ((curr - prev) / Math.abs(prev)) * 100 : null;
+      const deltaSpan = (delta, invertColor) => { if (delta == null) return ''; const isGood = invertColor ? delta <= 0 : delta >= 0; return `<div class="ms ${isGood ? 'pos-text' : 'neg-text'}">${fPct(delta)} ${compLabel}</div>`; };
+      compHtml.ongoing = deltaSpan(pctChange(latestOngoing, compOngoingEnd), false);
+      compHtml.mrr = deltaSpan(pctChange(currentMRR, compRevenueEnd), false);
+      compHtml.cancelled = deltaSpan(pctChange(totalCancelledInPeriod, compTotalCancelled), true);
+      compHtml.growth = (growthPct != null && compGrowthPct != null) ? `<div class="ms">${(growthPct - compGrowthPct >= 0 ? '+' : '')}${(growthPct - compGrowthPct).toFixed(1)}pp ${compLabel}</div>` : '';
+      compHtml.churn = (churnPct != null && compChurnPct != null) ? `<div class="ms ${churnPct - compChurnPct <= 0 ? 'pos-text' : 'neg-text'}">${(churnPct - compChurnPct >= 0 ? '+' : '')}${(churnPct - compChurnPct).toFixed(1)}pp ${compLabel}</div>` : '';
+    } else {
+      const noData = `<div class="ms">No data ${compLabel}</div>`;
+      compHtml = { ongoing: noData, mrr: noData, cancelled: noData, growth: noData, churn: noData };
+    }
+  }
+
+  document.getElementById('ov-metrics').innerHTML = `
+    <div class="mc"><div class="ml">Ongoing members (not cancelled)</div><div class="mv">${latestOngoing.toLocaleString()}</div>${compHtml.ongoing}</div>
+    <div class="mc pos"><div class="ml">Monthly Recurring Revenue</div><div class="mv">${fK(currentMRR)}</div>${compHtml.mrr}</div>
+    <div class="mc neg"><div class="ml">Cancelled (${TF_LABELS[PAGES.ov.timeframe]})</div><div class="mv">${totalCancelledInPeriod.toLocaleString()}</div>${compHtml.cancelled}</div>
+    <div class="mc"><div class="ml">Currently frozen</div><div class="mv">${currentFrozen.toLocaleString()}</div></div>
+    <div class="mc"><div class="ml">Growth (selected range)</div><div class="mv ${growthPct == null ? '' : (growthPct >= 0 ? 'pos-text' : 'neg-text')}">${fPct(growthPct)}</div>${compHtml.growth}</div>
+    <div class="mc"><div class="ml">Avg weekly churn rate</div><div class="mv ${churnPct == null ? '' : 'neg-text'}">${churnPct == null ? '—' : churnPct.toFixed(1) + '%'}</div>${compHtml.churn}</div>
+  `;
+
+  const studioComparisonData = getStudioComparisonData();
+  const studioColors = [C.enmei, C.teal, C.slate, C.neg];
+  const allWeekLabels = Array.from(new Set(studioComparisonData.flatMap(s => s.weekly.map(w => w.week)))).sort();
+  mk('chartStudioCompare', { type: 'line', data: { labels: allWeekLabels, datasets: studioComparisonData.map((s, i) => ({
+    label: s.studio, data: allWeekLabels.map(wk => { const f = s.weekly.find(w => w.week === wk); return f ? f.active_count : null; }),
+    borderColor: studioColors[i % studioColors.length], backgroundColor: 'transparent', tension: .3, pointRadius: 2,
+  })) }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, labels: { color: C.text2, font: { size: 11 } } } }, scales: { x: xsc(), y: ysc() } } });
+
+  const studioTableBody = document.getElementById('studio-compare-table-body');
+  studioTableBody.innerHTML = studioComparisonData.length === 0 ? `<tr><td colspan="7" class="empty-state">No studio data.</td></tr>` :
+    studioComparisonData.map(s => `<tr><td>${s.studio}</td><td>${s.ongoingEnd != null ? s.ongoingEnd.toLocaleString() : '—'}</td><td>${fK(s.mrr)}</td>
+      <td class="${s.growthPct == null ? '' : (s.growthPct >= 0 ? 'pos-text' : 'neg-text')}">${fPct(s.growthPct)}</td>
+      <td class="${s.churnPct == null ? '' : 'neg-text'}">${s.churnPct == null ? '—' : s.churnPct.toFixed(1) + '%'}</td>
+      <td>${s.cancelled.toLocaleString()}</td><td>${s.frozen.toLocaleString()}</td></tr>`).join('');
+
+  renderStatusMixAndTable();
+
+  if (weekly.length === 0) { if (charts.chartActive) { charts.chartActive.destroy(); delete charts.chartActive; } return; }
+  mk('chartActive', { type: 'line', data: { labels: weekly.map(w => w.week), datasets: [{ data: weekly.map(w => w.active_count), borderColor: C.enmei, backgroundColor: 'rgba(232,68,42,0.1)', fill: true, tension: .3, pointRadius: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: ysc() } } });
+}
+
+// ════════════════════════════════════════════════════════════════
+// RENDER: REVENUE
+// ════════════════════════════════════════════════════════════════
+function renderRevenue() {
+  const liveRows = getLiveRows('rev');
+  const currentMRR = liveRows.reduce((s, r) => s + (Number(r.active_revenue) || 0), 0);
+  const byTier = revenueByGroup(liveRows, 'tier');
+  const byType = revenueByGroup(liveRows, 'membership_name');
+
+  // MRR over time: revenue is a SNAPSHOT per week (total recurring revenue
+  // as of that week), not a flow -- so we take the LAST week within each
+  // calendar month as that month's representative value, not sum weeks
+  // together (which would multiply-count the same ongoing revenue ~4x).
+  // Computed here (not scoped to the timeframe toggle, same as the chart
+  // below) since the new MRR growth metric card needs it too.
+  const historyForMrr = applyCommonFilters('rev', HISTORY_ROWS);
+  const lastWeekPerMonth = new Map();
+  for (const row of historyForMrr) {
+    const month = row.week.slice(0, 7);
+    if (!lastWeekPerMonth.has(month) || row.week > lastWeekPerMonth.get(month)) lastWeekPerMonth.set(month, row.week);
+  }
+  const months = Array.from(lastWeekPerMonth.keys()).sort();
+  const monthlyMrrSeries = months.map(month => {
+    const targetWeek = lastWeekPerMonth.get(month);
+    const total = historyForMrr.filter(r => r.week === targetWeek).reduce((s, r) => s + (Number(r.active_only_revenue) || 0), 0);
+    return { month, mrr: total };
+  });
+  let mrrGrowthPct = null;
+  if (monthlyMrrSeries.length >= 2) {
+    const latest = monthlyMrrSeries[monthlyMrrSeries.length - 1].mrr;
+    const prior = monthlyMrrSeries[monthlyMrrSeries.length - 2].mrr;
+    mrrGrowthPct = prior !== 0 ? ((latest - prior) / Math.abs(prior)) * 100 : null;
+  }
+
+  const totalActive = liveRows.reduce((s, r) => s + (Number(r.active) || 0), 0);
+  const arpu = totalActive > 0 ? currentMRR / totalActive : null;
+
+  // Revenue concentration -- same underlying number the flag banner below
+  // uses, now also surfaced as a real metric card, not just a banner that
+  // only appears once it crosses the 50% threshold.
+  const totalTierRevenue = byTier.reduce((s, t) => s + t.revenue, 0);
+  const topTier = byTier.length > 0 ? byTier[0] : null; // already sorted descending by revenue
+  const topTierShare = (topTier && totalTierRevenue > 0) ? (topTier.revenue / totalTierRevenue) * 100 : null;
+
+  document.getElementById('rev-metrics').innerHTML = `
+    <div class="mc pos"><div class="ml">Monthly Recurring Revenue</div><div class="mv">${fK(currentMRR)}</div></div>
+    <div class="mc"><div class="ml">MRR growth (month over month)</div><div class="mv ${mrrGrowthPct == null ? '' : (mrrGrowthPct >= 0 ? 'pos-text' : 'neg-text')}">${mrrGrowthPct == null ? '—' : fPct(mrrGrowthPct)}</div><div class="ms">Latest full month vs. the one before -- always calendar-month based, not the timeframe toggle</div></div>
+    <div class="mc"><div class="ml">Revenue per ongoing member</div><div class="mv">${arpu == null ? '—' : fK(arpu)}</div><div class="ms">MRR ÷ ongoing members, right now</div></div>
+    <div class="mc"><div class="ml">Revenue concentration</div><div class="mv">${topTierShare == null ? '—' : topTierShare.toFixed(0) + '%'}</div><div class="ms">${topTier ? `in "${topTier.group}"` : 'No tier data'}</div></div>
+  `;
+
+  // Payment/ding failure risk flag + outreach widget
+  const riskRows = getPaymentRiskRows();
+  const riskAmount = riskRows.reduce((s, r) => s + (Number(r.renewal_rate) || 0), 0);
+  const riskFlagBanner = document.getElementById('rev-risk-flag');
+  if (riskRows.length > 0) {
+    riskFlagBanner.classList.add('show');
+    document.getElementById('rev-risk-flag-text').textContent =
+      `${riskRows.length} membership${riskRows.length === 1 ? '' : 's'} in payment failure or ding failure -- ${fK(riskAmount)} MRR at risk until resolved. See outreach list below.`;
+  } else riskFlagBanner.classList.remove('show');
+
+  const riskTbody = document.getElementById('risk-table-body');
+  riskTbody.innerHTML = riskRows.length === 0 ? `<tr><td colspan="7" class="empty-state">No memberships currently in payment failure or ding failure for this filter.</td></tr>` :
+    riskRows.map(r => `<tr><td>${r.customer_id || '—'}</td><td>${r.membership_id || '—'}</td><td>${r.studio || '—'}</td><td>${r.tier || '—'}</td>
+      <td>${r.membership_name || '—'}</td><td>${(r.status || '—').replace(/_/g,' ')}</td><td>${fK(Number(r.renewal_rate))}</td></tr>`).join('');
+
+  // Revenue concentration flag -- if one tier dominates MRR, that's real
+  // exposure. Reuses topTierShare computed above for the metric card,
+  // rather than recomputing the same thing twice.
+  const concentrationFlagBanner = document.getElementById('rev-concentration-flag');
+  if (topTierShare != null && topTierShare >= 50) {
+    concentrationFlagBanner.classList.add('show');
+    document.getElementById('rev-concentration-flag-text').textContent =
+      `${topTierShare.toFixed(0)}% of MRR is concentrated in "${topTier.group}" -- real exposure if this tier underperforms.`;
+  } else concentrationFlagBanner.classList.remove('show');
+
+  mk('chartMrrOverTime', { type: 'line', data: { labels: monthlyMrrSeries.map(m => m.month), datasets: [{
+    data: monthlyMrrSeries.map(m => m.mrr), borderColor: C.enmei, backgroundColor: 'rgba(232,68,42,0.1)', fill: true, tension: .3, pointRadius: 3,
+  }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: yscCurrency() } } });
+
+  mk('chartRevenueTier', { type: 'bar', data: { labels: byTier.map(g => g.group), datasets: [{ data: byTier.map(g => g.revenue), backgroundColor: C.enmei, borderRadius: 4, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: yscCurrency() } } });
+  mk('chartRevenueType', { type: 'bar', data: { labels: byType.map(g => g.group), datasets: [{ data: byType.map(g => g.revenue), backgroundColor: C.slate, borderRadius: 4, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: yscCurrency() } } });
+}
+
+// ════════════════════════════════════════════════════════════════
+// RENDER: CHURN & RETENTION
+// ════════════════════════════════════════════════════════════════
+// ── Retention Overview: the "are we losing members, and why" page ──
+function renderChurnOverview() {
+  const historyRows = getHistoryRows('cho');
+  const weekly = aggregateByWeek(historyRows);
+  const totalNewInPeriod = weekly.reduce((s, w) => s + w.new_count, 0);
+  const totalCancelledInPeriod = weekly.reduce((s, w) => s + w.cancelled_count, 0);
+  const churnPct = averageWeeklyChurnRate(weekly);
+
+  const reasonWeekly = new Map();
+  for (const row of historyRows) {
+    const key = row.week;
+    if (!reasonWeekly.has(key)) reasonWeekly.set(key, { week: key, cost: 0, moving: 0, injury: 0, other: 0 });
+    const e = reasonWeekly.get(key);
+    e.cost += Number(row.cancelled_reason_cost) || 0;
+    e.moving += Number(row.cancelled_reason_moving) || 0;
+    e.injury += Number(row.cancelled_reason_injury) || 0;
+    e.other += Number(row.cancelled_reason_other) || 0;
+  }
+  const reasonSeries = Array.from(reasonWeekly.values()).sort((a, b) => a.week.localeCompare(b.week));
+  const totalCost = reasonSeries.reduce((s, r) => s + r.cost, 0);
+  const totalMoving = reasonSeries.reduce((s, r) => s + r.moving, 0);
+  const totalInjury = reasonSeries.reduce((s, r) => s + r.injury, 0);
+  const totalOther = reasonSeries.reduce((s, r) => s + r.other, 0);
+  const totalReasonKnown = totalCost + totalMoving + totalInjury + totalOther;
+  const controllable = totalCost + totalOther;
+  const uncontrollable = totalMoving + totalInjury;
+  // Controllable/uncontrollable used to be a separate metric box duplicating
+  // the reasons chart below -- now folded into this chart's own subtitle
+  // instead, computed from the exact same data the chart draws from.
+  document.getElementById('reasons-sub').textContent = totalReasonKnown > 0
+    ? `Genuine departures only. ${((controllable/totalReasonKnown)*100).toFixed(0)}% controllable (cost, other/unresolved) vs. ${((uncontrollable/totalReasonKnown)*100).toFixed(0)}% uncontrollable (moving, injury) this period.`
+    : 'Genuine departures only -- see Definitions page.';
+
+  let cancelledDelta = '', newDelta = '';
+  if (COMPARE_MODES.cho !== 'none') {
+    const compWeeklyCh = aggregateByWeek(getComparisonHistoryRows('cho'));
+    const compLabelCh = { previous_period: 'vs previous period', previous_month: 'vs previous month', last_year: 'vs same period last year' }[COMPARE_MODES.cho];
+    if (compWeeklyCh.length > 0) {
+      const compCancelled = compWeeklyCh.reduce((s, w) => s + w.cancelled_count, 0);
+      const compNew = compWeeklyCh.reduce((s, w) => s + w.new_count, 0);
+      const pctChange = (curr, prev) => (prev != null && prev !== 0) ? ((curr - prev) / Math.abs(prev)) * 100 : null;
+      const cDelta = pctChange(totalCancelledInPeriod, compCancelled);
+      const nDelta = pctChange(totalNewInPeriod, compNew);
+      cancelledDelta = cDelta == null ? '' : `<div class="ms ${cDelta <= 0 ? 'pos-text' : 'neg-text'}">${fPct(cDelta)} ${compLabelCh}</div>`;
+      newDelta = nDelta == null ? '' : `<div class="ms ${nDelta >= 0 ? 'pos-text' : 'neg-text'}">${fPct(nDelta)} ${compLabelCh}</div>`;
+    } else {
+      cancelledDelta = `<div class="ms">No data ${compLabelCh}</div>`;
+      newDelta = `<div class="ms">No data ${compLabelCh}</div>`;
+    }
+  }
+
+  document.getElementById('cho-metrics').innerHTML = `
+    <div class="mc neg"><div class="ml">Cancelled (${TF_LABELS[PAGES.cho.timeframe]})</div><div class="mv">${totalCancelledInPeriod.toLocaleString()}</div>${cancelledDelta}</div>
+    <div class="mc"><div class="ml">Avg weekly churn rate</div><div class="mv ${churnPct == null ? '' : 'neg-text'}">${churnPct == null ? '—' : churnPct.toFixed(1) + '%'}</div></div>
+    <div class="mc"><div class="ml">New signups (${TF_LABELS[PAGES.cho.timeframe]})</div><div class="mv">${totalNewInPeriod.toLocaleString()}</div>${newDelta}</div>
+  `;
+
+  if (weekly.length === 0) {
+    ['chartNewCancelled', 'chartReasons'].forEach(id => { if (charts[id]) { charts[id].destroy(); delete charts[id]; } });
+    return;
+  }
+  mk('chartNewCancelled', { type: 'line', data: { labels: weekly.map(w => w.week), datasets: [
+    { label: 'New', data: weekly.map(w => w.new_count), borderColor: C.teal, backgroundColor: 'rgba(45,212,191,0.08)', fill: false, tension: .3, pointRadius: 2 },
+    { label: 'Cancelled', data: weekly.map(w => w.cancelled_count), borderColor: C.neg, backgroundColor: 'rgba(224,98,90,0.08)', fill: false, tension: .3, pointRadius: 2 },
+    { label: 'Frozen', data: weekly.map(w => w.frozen_count), borderColor: C.slate, backgroundColor: 'rgba(124,147,201,0.08)', fill: false, tension: .3, pointRadius: 2 },
+  ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, labels: { color: C.text2, font: { size: 11 } } } }, scales: { x: xsc(), y: ysc() } } });
+
+  // Colors now group by controllability, not just by individual reason --
+  // warm tones (Cost, Other) = controllable, cool tones (Moving, Injury) =
+  // not. This is what replaced the separate controllable/uncontrollable box.
+  mk('chartReasons', { type: 'bar', data: { labels: reasonSeries.map(w => w.week), datasets: [
+    { label: 'Cost', data: reasonSeries.map(w => w.cost), backgroundColor: C.neg },
+    { label: 'Other/unresolved', data: reasonSeries.map(w => w.other), backgroundColor: '#d98a52' },
+    { label: 'Moving', data: reasonSeries.map(w => w.moving), backgroundColor: C.slate },
+    { label: 'Injury', data: reasonSeries.map(w => w.injury), backgroundColor: '#5a6fa0' },
+  ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, labels: { color: C.text2, font: { size: 11 } } } }, scales: { x: { ...xsc(), stacked: true }, y: { ...ysc(), stacked: true } } } });
+}
+
+// ── At Risk / Term Ending: the "who to call this week" page. No
+// timeframe toggle -- nothing here uses one, the list is always "next 30
+// days from today," so a timeframe control would be actively misleading. ──
+function renderChurnAtRisk() {
+  const nearingTermRows = getNearingTermRows('car');
+  document.getElementById('term-end-hero-value').textContent = nearingTermRows.length.toLocaleString();
+
+  const termTbody = document.getElementById('term-end-table-body');
+  termTbody.innerHTML = nearingTermRows.length === 0 ? `<tr><td colspan="6" class="empty-state">No one nearing term end in the next 30 days for this filter.</td></tr>` :
+    nearingTermRows.sort((a, b) => new Date(a.term_end_date) - new Date(b.term_end_date)).map(r => `
+      <tr><td>${r.customer_id || '—'}</td><td>${r.membership_id || '—'}</td><td>${r.studio || '—'}</td><td>${r.tier || '—'}</td><td>${r.membership_name || '—'}</td>
+      <td>${r.term_end_date ? new Date(r.term_end_date).toISOString().slice(0,10) : '—'}</td></tr>`).join('');
+}
+
+// ── Retention Deep Dive: when & why people leave, and the term-renewal
+// cycle. Analytical, not a daily check -- keeps the heavier stuff off the
+// two pages above. ──
+function renderChurnDeepDive() {
+  renderTenureMix();
+
+  // Helper: is this row's cancellation a real departure (not a switch/renewal)?
+  function isRealSwitch(v) { return String(v).toLowerCase() === 'true'; }
+  const isRealDeparture = r => r.cancellation_datetime && !isRealSwitch(r.is_switch_cancellation);
+
+  const logFilteredCdd = applyCommonFilters('cdd', CUSTOMER_LOG_ROWS);
+  const { start: cddStart, end: cddEnd } = getDateBounds('cdd');
+
+  // ── Post-term continuation: correctly excludes early leavers, scoped to
+  // the selected timeframe (by when their term ended). Trimmed from 4
+  // metric cards to 2 -- "continued count" and "did not continue count"
+  // are both directly derivable from the % and the total, so showing all
+  // four was just the same information twice. ──
+  const today = new Date();
+  const eligibleCohort = logFilteredCdd.filter(r => {
+    if (!r.term_end_date) return false;
+    const termEnd = new Date(r.term_end_date);
+    if (termEnd > today) return false;
+    if (termEnd < new Date(cddStart) || termEnd > new Date(cddEnd + 'T23:59:59')) return false;
+    if (isRealDeparture(r) && new Date(r.cancellation_datetime) < termEnd) return false; // left early -- exclude entirely
+    return true;
+  });
+  const continuedCount = eligibleCohort.filter(r => !isRealDeparture(r)).length;
+  const droppedOffRows = eligibleCohort.filter(r => isRealDeparture(r));
+  const continuationPct = eligibleCohort.length > 0 ? (continuedCount / eligibleCohort.length) * 100 : null;
+  document.getElementById('post-term-metrics').innerHTML = `
+    <div class="mc pos"><div class="ml">Continued past term end</div><div class="mv ${continuationPct == null ? '' : 'pos-text'}">${continuationPct == null ? '—' : continuationPct.toFixed(1) + '%'}</div></div>
+    <div class="mc"><div class="ml">Completed their term (total)</div><div class="mv">${eligibleCohort.length.toLocaleString()}</div><div class="ms">${continuedCount.toLocaleString()} continued · ${droppedOffRows.length.toLocaleString()} did not</div></div>
+  `;
+
+  // ── When do post-term dropoffs happen? Months since term end, dynamic range ──
+  function monthsBetween(d1, d2) {
+    return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24 * 30.44));
+  }
+  const postTermMonthCounts = new Map();
+  let maxPostTermMonth = 0;
+  droppedOffRows.forEach(r => {
+    const m = Math.max(1, monthsBetween(new Date(r.term_end_date), new Date(r.cancellation_datetime)) + 1);
+    postTermMonthCounts.set(m, (postTermMonthCounts.get(m) || 0) + 1);
+    maxPostTermMonth = Math.max(maxPostTermMonth, m);
+  });
+  const postTermLabels = Array.from({ length: maxPostTermMonth || 1 }, (_, i) => `Renewed +${i + 1}mo`);
+  const postTermData = postTermLabels.map((_, i) => postTermMonthCounts.get(i + 1) || 0);
+  mk('chartPostTermDropoff', { type: 'bar', data: { labels: postTermLabels, datasets: [{ data: postTermData, backgroundColor: C.neg, borderRadius: 4, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: ysc() } } });
+
+  // ── Dropoff timing, ALL genuine departures (including early leavers), dynamic month range ──
+  function dropoffByMonth(rows) {
+    const counts = new Map();
+    let maxMonth = 0;
+    rows.filter(isRealDeparture).forEach(r => {
+      const m = Math.max(1, monthsBetween(new Date(r.start_date), new Date(r.cancellation_datetime)) + 1);
+      counts.set(m, (counts.get(m) || 0) + 1);
+      maxMonth = Math.max(maxMonth, m);
+    });
+    return { counts, maxMonth };
+  }
+  const currentDeparturesInRange = logFilteredCdd.filter(r => isRealDeparture(r) && new Date(r.cancellation_datetime) >= new Date(cddStart) && new Date(r.cancellation_datetime) <= new Date(cddEnd + 'T23:59:59'));
+  const { counts: currentCounts, maxMonth: currentMax } = dropoffByMonth(currentDeparturesInRange);
+
+  let compCounts = new Map(), compMax = 0, compLabel = '';
+  if (COMPARE_MODES.cdd !== 'none') {
+    const compBounds = getComparisonBounds('cdd');
+    if (compBounds) {
+      const compDepartures = logFilteredCdd.filter(r => isRealDeparture(r) && new Date(r.cancellation_datetime) >= new Date(compBounds.start) && new Date(r.cancellation_datetime) <= new Date(compBounds.end + 'T23:59:59'));
+      const result = dropoffByMonth(compDepartures);
+      compCounts = result.counts; compMax = result.maxMonth;
+      compLabel = { previous_period: 'Previous period', previous_month: 'Previous month', last_year: 'Same period last year' }[COMPARE_MODES.cdd];
+    }
+  }
+  const overallMax = Math.max(currentMax, compMax, 1);
+  const dropoffLabels = Array.from({ length: overallMax }, (_, i) => `Month ${i + 1}`);
+  function toShares(counts) {
+    const total = Array.from(counts.values()).reduce((a, b) => a + b, 0);
+    return dropoffLabels.map((_, i) => total > 0 ? ((counts.get(i + 1) || 0) / total) * 100 : 0);
+  }
+  const dropoffDatasets = [{ label: 'Selected range', data: toShares(currentCounts), backgroundColor: C.enmei, borderRadius: 4, borderSkipped: false }];
+  if (COMPARE_MODES.cdd !== 'none' && compCounts.size > 0) {
+    dropoffDatasets.push({ label: compLabel, data: toShares(compCounts), backgroundColor: C.slate, borderRadius: 4, borderSkipped: false });
+  }
+  mk('chartDropoff', { type: 'bar', data: { labels: dropoffLabels, datasets: dropoffDatasets },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: dropoffDatasets.length > 1, labels: { color: C.text2, font: { size: 11 } } } },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(0)}%` } },
+      scales: { x: xsc(), y: { ...ysc(), ticks: { ...ysc().ticks, callback: v => v + '%' } } } } });
+}
+
+// ════════════════════════════════════════════════════════════════
+// RENDER: COMPOSITION
+// ════════════════════════════════════════════════════════════════
+function getAsOfDateCdd() {
+  const input = document.getElementById('as-of-date-cdd');
+  return input.value ? new Date(input.value) : new Date();
+}
+function resetAsOfDateCdd() {
+  document.getElementById('as-of-date-cdd').value = toISO(new Date());
+  renderChurnDeepDive();
+}
+function isToday(d) {
+  const today = new Date();
+  return d.toDateString() === today.toDateString();
+}
+
+// Status mix + full detail table -- moved into Overview, always "right now"
+// (Overview stays lean -- no As of date reconstruction here; that lives
+// specifically with Tenure Mix on Churn & Retention, since it's more
+// directly relevant to retention analysis)
+function renderStatusMixAndTable() {
+  const liveRows = getLiveRows('ov');
+
+  const tbody = document.getElementById('m-table-body');
+  tbody.innerHTML = liveRows.length === 0 ? `<tr><td colspan="10" class="empty-state">No data for this filter.</td></tr>` :
+    liveRows.sort((a, b) => (Number(b.active) || 0) - (Number(a.active) || 0)).map(r =>
+      `<tr><td>${r.studio || '—'}</td><td>${r.tier || '—'}</td><td>${r.membership_name || '—'}</td><td>${r.active || 0}</td><td>${r.frozen || 0}</td>
+       <td>${r.terminated || 0}</td><td>${r.payment_failure || 0}</td><td>${r.ding_failure || 0}</td><td>${r.done || 0}</td><td>${fK(r.active_revenue)}</td></tr>`
+    ).join('');
+
+  const mix = statusMix(liveRows);
+  mk('chartMix', { type: 'bar', data: { labels: mix.map(s => s.status.replace(/_/g,' ')), datasets: [{ data: mix.map(s => s.count), backgroundColor: C.neg, borderRadius: 4, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: ysc() } } });
+}
+
+// Tenure mix -- reconstructed from real dates in Customer Log for any
+// date, now living on Churn & Retention alongside the rest of the
+// retention/dropoff analysis. Uses the Churn page's own studio/tier filters.
+function renderTenureMix() {
+  const asOfDate = getAsOfDateCdd();
+  const asOfToday = isToday(asOfDate);
+  const logFiltered = applyCommonFilters('cdd', CUSTOMER_LOG_ROWS);
+  const ongoingAsOfDate = logFiltered.filter(r => {
+    if (!r.start_date) return false;
+    const start = new Date(r.start_date);
+    if (start > asOfDate) return false;
+    if (r.cancellation_datetime && new Date(r.cancellation_datetime) <= asOfDate) return false;
+    return true;
+  });
+  // Uniform monthly buckets (Month 1, 2, 3...), extending as far as real
+  // data goes -- lets clustering around the 6-month renewal point (and
+  // 12 months, 18 months, etc.) show up naturally, rather than being
+  // smoothed away by a coarse "3-6 months" style bucket.
+  const monthCounts = new Map();
+  let maxMonth = 0;
+  ongoingAsOfDate.forEach(r => {
+    const ageDays = Math.floor((asOfDate - new Date(r.start_date)) / (1000 * 60 * 60 * 24));
+    const month = Math.floor(ageDays / 30.44) + 1;
+    monthCounts.set(month, (monthCounts.get(month) || 0) + 1);
+    maxMonth = Math.max(maxMonth, month);
+  });
+  const tenureLabels = Array.from({ length: maxMonth || 1 }, (_, i) => `Month ${i + 1}`);
+  const tenureData = tenureLabels.map((_, i) => monthCounts.get(i + 1) || 0);
+  document.getElementById('tenure-mix-sub').textContent = asOfToday
+    ? 'How long members were with us, right now, broken out by month. Memberships are 6-month commitments with an option to renew -- watch for clustering right around Month 6, Month 12, etc., which reflects the renewal decision point, not necessarily dissatisfaction'
+    : `Reconstructed for ${toISO(asOfDate)}, broken out by month. Memberships are 6-month commitments with an option to renew -- watch for clustering right around Month 6, Month 12, etc., which reflects the renewal decision point, not necessarily dissatisfaction`;
+  mk('chartAgePyramid', { type: 'bar', data: { labels: tenureLabels, datasets: [{ data: tenureData, backgroundColor: C.teal, borderRadius: 4, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: ysc() } } });
+}
+
+// ════════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// RENDER: INTRO OFFERS
+// ════════════════════════════════════════════════════════════════
+function renderSummerStrong() {
+  // Standalone, lighter widget -- no timeframe/studio filters, always
+  // shows full aggregate history. Same outcome categories as the main
+  // system, but this is a deliberately SEPARATE system (see Definitions).
+  const outcomes = ['Converted to Membership', 'Converted to Pack', 'Repeated Summer Strong', 'Casual Re-engagement Only', 'Pending (recent, no outcome yet)', 'No Further Purchase'];
+  const totalsByOutcome = {};
+  outcomes.forEach(o => totalsByOutcome[o] = 0);
+  SS_PERFORMANCE_ROWS.forEach(r => { if (totalsByOutcome.hasOwnProperty(r.outcome)) totalsByOutcome[r.outcome] += Number(r.count) || 0; });
+  const ssTotal = Object.values(totalsByOutcome).reduce((a, b) => a + b, 0);
+  // Flat £150 per signup, per Remy -- Summer Strong's real revenue is no
+  // longer visible via Membership Health now that it's excluded from
+  // there (see Definitions), so it needs to live here instead. This is
+  // an estimate (starters x price), not a real per-transaction revenue
+  // pull -- doesn't account for any discounts/refunds on individual
+  // purchases. Revisit if the promo price ever changes or varies.
+  const SUMMER_STRONG_PRICE_GBP = 150;
+  const ssRevenue = ssTotal * SUMMER_STRONG_PRICE_GBP;
+
+  document.getElementById('ss-metrics').innerHTML = ssTotal === 0 ? `<div class="mc"><div class="ml">No data yet</div><div class="mv" style="font-size:13px">No Summer Strong purchases found -- check the workflow has run since this promo launched.</div></div>` : `
+    <div class="mc"><div class="ml">Total starters</div><div class="mv">${ssTotal.toLocaleString()}</div></div>
+    <div class="mc pos"><div class="ml">Revenue collected (est.)</div><div class="mv pos-text">${fK(ssRevenue)}</div><div class="ms">${ssTotal} × £${SUMMER_STRONG_PRICE_GBP} flat price -- not a real per-transaction pull</div></div>
+    <div class="mc pos"><div class="ml">Converted to membership</div><div class="mv pos-text">${(totalsByOutcome['Converted to Membership']/ssTotal*100).toFixed(1)}%</div><div class="ms">${totalsByOutcome['Converted to Membership']} people</div></div>
+    <div class="mc"><div class="ml">Converted to pack</div><div class="mv">${(totalsByOutcome['Converted to Pack']/ssTotal*100).toFixed(1)}%</div><div class="ms">${totalsByOutcome['Converted to Pack']} people</div></div>
+    <div class="mc"><div class="ml">Repeated Summer Strong</div><div class="mv">${(totalsByOutcome['Repeated Summer Strong']/ssTotal*100).toFixed(1)}%</div><div class="ms">${totalsByOutcome['Repeated Summer Strong']} people</div></div>
+    <div class="mc neg"><div class="ml">No further purchase</div><div class="mv neg-text">${(totalsByOutcome['No Further Purchase']/ssTotal*100).toFixed(1)}%</div><div class="ms">${totalsByOutcome['No Further Purchase']} people</div></div>
+  `;
+
+  const studios = Array.from(new Set(SS_PERFORMANCE_ROWS.map(r => r.studio))).sort();
+  const perfBody = document.getElementById('ss-performance-body');
+  perfBody.innerHTML = studios.length === 0 ? `<tr><td colspan="8" class="empty-state">No Summer Strong data yet.</td></tr>` :
+    studios.map(studio => {
+      const rows = SS_PERFORMANCE_ROWS.filter(r => r.studio === studio);
+      const get = outcome => rows.find(r => r.outcome === outcome)?.count || 0;
+      const total = outcomes.reduce((s, o) => s + Number(get(o)), 0);
+      return `<tr><td>${studio}</td><td>${get('Converted to Membership')}</td><td>${get('Converted to Pack')}</td><td>${get('Repeated Summer Strong')}</td><td>${get('Casual Re-engagement Only')}</td><td>${get('Pending (recent, no outcome yet)')}</td><td>${get('No Further Purchase')}</td><td>${total}</td></tr>`;
+    }).join('');
+
+  const ssExpiringSoon = SS_EXPIRING_ROWS.filter(r => r.tag === 'expiring_soon').reduce((s, r) => s + (Number(r.count) || 0), 0);
+  const ssExpired = SS_EXPIRING_ROWS.filter(r => r.tag === 'expired').reduce((s, r) => s + (Number(r.count) || 0), 0);
+  document.getElementById('ss-expiring-metrics').innerHTML = `
+    <div class="mc neg"><div class="ml">Expiring soon (≤3 days left)</div><div class="mv neg-text">${ssExpiringSoon.toLocaleString()}</div></div>
+    <div class="mc"><div class="ml">Recently expired (30d)</div><div class="mv">${ssExpired.toLocaleString()}</div></div>
+  `;
+  const ssExpBody = document.getElementById('ss-expiring-body');
+  ssExpBody.innerHTML = SS_EXPIRING_ROWS.length === 0 ? `<tr><td colspan="4" class="empty-state">No one currently expiring soon or recently expired.</td></tr>` :
+    SS_EXPIRING_ROWS.sort((a, b) => Number(a.avg_days_until_expiration) - Number(b.avg_days_until_expiration)).map(r =>
+      `<tr><td>${r.studio}</td><td>${r.tag.replace(/_/g,' ')}</td><td>${r.count}</td><td>${r.avg_days_until_expiration}</td></tr>`
+    ).join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+// RENDER: CLASS PERFORMANCE
+// ════════════════════════════════════════════════════════════════
+let CP_NORM_ROWS = [];
+function normalizeSession(r) {
+  const time = r['Class Time'] || '';
+  // BUG FIX: this used to round down to the top of the hour
+  // (split(':')[0] + ':00'), so an 8:30pm class showed as "20:00" -- since
+  // real classes run consistently on the half-hour, that mislabeled
+  // EVERY class, and it also fed the coach benchmark grouping (studio +
+  // time slot), meaning a 20:30 class was being compared against a
+  // slot that doesn't exist rather than other real 20:30 classes. Now
+  // preserves the exact HH:MM instead of rounding.
+  const hour = time ? String(time).slice(0, 5) : null;
+  return {
+    studio: r.Location,
+    date: r['Class Date'],
+    time: String(time),
+    hour,
+    dayOfWeek: r['Class Day of Week'],
+    instructors: (r.Instructors || '').split(',').map(s => s.trim()).filter(Boolean),
+    isExcluded: !!r.Is_Excluded_Class,
+    unassigned: !!r.Unassigned_Instructor_Flag,
+    checkedIn: Number(r['Checked In Reservations']) || 0,
+    lateCancelled: Number(r['Late Cancelled Reservations']) || 0,
+    noShow: Number(r['No Showed Reservations']) || 0,
+    adminHolds: Number(r['Admin Holds']) || 0,
+    capacity: Number(r['Actual Capacity']) || 0,
+    utilPct: r['% Utilization'] != null && r['% Utilization'] !== '' ? Number(r['% Utilization']) : null,
+    paidVisits: Number(r['Paid Visits']) || 0,
+    paidPct: r['Total % Paid Visits'] != null && r['Total % Paid Visits'] !== '' ? Number(r['Total % Paid Visits']) : null,
+  };
+}
+function ensureCPNormalized() {
+  if (CP_NORM_ROWS.length === 0 && CP_SESSION_ROWS.length > 0) CP_NORM_ROWS = CP_SESSION_ROWS.map(normalizeSession);
+}
+const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+// Half-hour granularity (06:00 -> 21:30), since real class times are now
+// preserved exactly (see normalizeSession) rather than rounded to the
+// hour. buildHeatmap() only renders columns that actually have data, so
+// this doesn't force every heatmap to show all 32 slots.
+const HOUR_ORDER = Array.from({ length: 32 }, (_, i) => {
+  const h = 6 + Math.floor(i / 2);
+  const m = i % 2 === 0 ? '00' : '30';
+  return String(h).padStart(2, '0') + ':' + m;
+});
+
+function getCPRows(page, studioOverride) {
+  ensureCPNormalized();
+  const st = PAGES[page];
+  const studio = studioOverride !== undefined ? studioOverride : st.studio;
+  const { start, end } = getDateBounds(page);
+  return CP_NORM_ROWS.filter(r => {
+    if (r.isExcluded) return false;
+    if (studio !== 'all' && r.studio !== studio) return false;
+    if (!r.date || r.date < start || r.date > end) return false;
+    return true;
+  });
+}
+function getCPComparisonRows(page) {
+  const bounds = getComparisonBounds(page);
+  if (!bounds) return [];
+  ensureCPNormalized();
+  const st = PAGES[page];
+  return CP_NORM_ROWS.filter(r => {
+    if (r.isExcluded) return false;
+    if (st.studio !== 'all' && r.studio !== st.studio) return false;
+    if (!r.date || r.date < bounds.start || r.date > bounds.end) return false;
+    return true;
+  });
+}
+function getCPCancelledCount(page, studioOverride, boundsOverride) {
+  const st = PAGES[page];
+  const studio = studioOverride !== undefined ? studioOverride : st.studio;
+  const { start, end } = boundsOverride || getDateBounds(page);
+  return CP_CANCEL_ROWS.filter(r => (studio === 'all' || r.studio === studio) && r.week >= start && r.week <= end)
+    .reduce((s, r) => s + (Number(r.cancelled_classes) || 0), 0);
+}
+function mean(arr) { const v = arr.filter(x => x != null && isFinite(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; }
+
+// Fixed 0-100% color scale so intensity is comparable across studios and
+// across the compare view. Breakpoints are deliberately shifted so a
+// strong class (80%+) already reads as visually "hot" rather than
+// reserving full saturation only for values near 100% -- a flat linear
+// gradient made genuinely good numbers (e.g. 82%) look washed out.
+function heatColor(pct) {
+  if (pct == null || !isFinite(pct)) return null;
+  const p = Math.max(0, Math.min(100, pct)) / 100;
+  // Muted-low-range traffic light: 0-45% stays clearly red in HUE but
+  // muted in brightness (rare in real data, so kept visually quiet
+  // rather than alarming); 45-100% gets richer, more differentiated
+  // color since that's where real utilization values actually cluster.
+  const stops = [
+    { p: 0, c: [185, 75, 70] },
+    { p: 0.45, c: [195, 140, 105] },
+    { p: 0.55, c: [217, 175, 70] },
+    { p: 0.65, c: [170, 180, 75] },
+    { p: 0.75, c: [110, 178, 82] },
+    { p: 0.88, c: [60, 165, 80] },
+    { p: 1, c: [40, 150, 70] },
+  ];
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) { if (p >= stops[i].p && p <= stops[i + 1].p) { lo = stops[i]; hi = stops[i + 1]; break; } }
+  const t = (hi.p === lo.p) ? 0 : (p - lo.p) / (hi.p - lo.p);
+  const c = lo.c.map((v, i) => Math.round(v + (hi.c[i] - v) * t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+function renderHeatLegend(elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const steps = 10;
+  el.innerHTML = Array.from({ length: steps }, (_, i) => `<span style="background:${heatColor(i / (steps - 1) * 100)}"></span>`).join('');
+}
+
+// Builds one heatmap grid -- TIME as rows, DAY OF WEEK as columns (the
+// way Remy reads a heatmap), from an already-filtered set of normalized
+// rows. metric: 'util' (% Utilization), 'paid' (% Paid Visits), or
+// 'count' (raw class count).
+// Builds one heatmap grid -- DAY OF WEEK as rows, TIME as columns
+// (reverted back from the transposed version -- felt clunky with 16
+// time columns squeezed vertically; this wide-and-short layout reads
+// better and is closer to the arrangement in Remy's own notebook).
+function buildHeatmap(containerId, rows, metric) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const cells = new Map(); // "day|hour" -> { sum, n }
+  rows.forEach(r => {
+    if (!r.dayOfWeek || !r.hour) return;
+    const key = r.dayOfWeek + '|' + r.hour;
+    if (!cells.has(key)) cells.set(key, { sum: 0, n: 0 });
+    const c = cells.get(key);
+    const v = metric === 'util' ? r.utilPct : metric === 'paid' ? r.paidPct : 1;
+    if (v != null) { c.sum += v; c.n += 1; }
+  });
+  const hoursUsed = HOUR_ORDER.filter(h => DAY_ORDER.some(d => cells.has(d + '|' + h)));
+  const hours = hoursUsed.length ? hoursUsed : HOUR_ORDER;
+  if (rows.length === 0) { container.innerHTML = `<div class="empty-state">No data for this selection.</div>`; return; }
+
+  let maxCount = 1;
+  if (metric === 'count') cells.forEach(c => { if (c.n > maxCount) maxCount = c.n; });
+
+  const gridCols = `70px repeat(${hours.length}, 1fr)`;
+  let html = `<div class="hm-grid" style="grid-template-columns:${gridCols}">`;
+  html += `<div></div>` + hours.map(h => `<div class="hm-collabel">${h}</div>`).join('');
+  DAY_ORDER.forEach(day => {
+    html += `<div class="hm-rowlabel">${day}</div>`;
+    hours.forEach(hour => {
+      const c = cells.get(day + '|' + hour);
+      if (!c || c.n === 0) { html += `<div class="hm-cell empty"></div>`; return; }
+      const avg = c.sum / c.n;
+      const bg = metric === 'count' ? heatColor((c.n / maxCount) * 100) : heatColor(avg);
+      const label = metric === 'count' ? c.n : avg.toFixed(0) + '%';
+      const tip = `${day} ${hour} — ${metric === 'count' ? c.n + ' classes' : avg.toFixed(1) + '%'} (n=${c.n})`;
+      html += `<div class="hm-cell" style="background:${bg}" data-tip="${tip}">${label}</div>`;
+    });
+  });
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+// Flags day/time slots that are meaningfully above or below the overall
+// average utilization for the current selection -- so a Wednesday 6pm
+// class that's consistently half-empty doesn't just sit quietly in the
+// heatmap, it surfaces as something to act on. Requires at least
+// MIN_SLOT_N classes in a slot before flagging it -- one bad class on a
+// rainy Tuesday isn't a pattern. Studio is included in the grouping key
+// even when "All Studios" is selected, so a slot flag never blends two
+// different studios' 9am classes into one misleading number -- when in
+// "All Studios" mode the studio name is shown alongside the flag so it's
+// clear which one it's about.
+const MIN_SLOT_N = 3;
+const SLOT_FLAG_THRESHOLD = 12; // percentage points from the overall average
+function computeSlotFlags(rows, overallAvg, start, end, showStudio) {
+  if (overallAvg == null) return { under: [], over: [] };
+  const startMs = new Date(start).getTime(), endMs = new Date(end).getTime();
+  const midMs = startMs + (endMs - startMs) / 2;
+  const cells = new Map(); // "studio|day|hour" -> stats
+  rows.forEach(r => {
+    if (!r.dayOfWeek || !r.hour || r.utilPct == null || !r.date) return;
+    const key = r.studio + '|' + r.dayOfWeek + '|' + r.hour;
+    if (!cells.has(key)) cells.set(key, { sum: 0, n: 0, firstSum: 0, firstN: 0, secondSum: 0, secondN: 0 });
+    const c = cells.get(key);
+    c.sum += r.utilPct; c.n += 1;
+    const rMs = new Date(r.date).getTime();
+    if (rMs < midMs) { c.firstSum += r.utilPct; c.firstN += 1; } else { c.secondSum += r.utilPct; c.secondN += 1; }
+  });
+  const results = [];
+  cells.forEach((c, key) => {
+    if (c.n < MIN_SLOT_N) return;
+    const avg = c.sum / c.n;
+    const delta = avg - overallAvg;
+    if (Math.abs(delta) < SLOT_FLAG_THRESHOLD) return;
+    const [studio, day, hour] = key.split('|');
+    // Trend needs at least 2 classes in EACH half of the selected period
+    // to say anything -- otherwise it's noise, not a trend.
+    const trend = (c.firstN >= 2 && c.secondN >= 2) ? (c.secondSum / c.secondN) - (c.firstSum / c.firstN) : null;
+    results.push({ studio, day, hour, avg, n: c.n, delta, trend });
+  });
+  const under = results.filter(r => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 5);
+  const over = results.filter(r => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 5);
+  return { under, over };
+}
+function renderSlotFlagRow(r, showStudio) {
+  const label = (showStudio ? r.studio + ' · ' : '') + r.day.slice(0, 3) + ' ' + r.hour;
+  const deltaAbs = Math.abs(r.delta).toFixed(0);
+  const deltaWord = r.delta >= 0
+    ? `${deltaAbs} points above the studio's overall average utilization`
+    : `${deltaAbs} points below the studio's overall average utilization`;
+  let trendWord = 'not enough data yet to show a trend';
+  if (r.trend != null) {
+    if (r.trend >= 3) trendWord = `improving — up ${r.trend.toFixed(0)} points over the period`;
+    else if (r.trend <= -3) trendWord = `declining — down ${Math.abs(r.trend).toFixed(0)} points over the period`;
+    else trendWord = 'holding steady over the period';
+  }
+  return `<div class="flag-row">
+    <div class="flag-row-top"><span class="mr-name">${label}</span><span class="mr-val ${r.delta >= 0 ? 'pos-text' : 'neg-text'}">${r.avg.toFixed(0)}%</span></div>
+    <div class="flag-row-sub">${deltaWord} · ${r.n} classes · ${trendWord}</div>
+  </div>`;
+}
+
+function toggleStudioCompareHeatmap() {
+  const toggle = document.getElementById('cp-compare-toggle');
+  const isOn = toggle.classList.toggle('on');
+  document.getElementById('cp-hm-single').style.display = isOn ? 'none' : 'block';
+  document.getElementById('cp-hm-compare').style.display = isOn ? 'block' : 'none';
+  renderClassPerformance();
+}
+
+function renderClassPerformance() {
+  ensureCPNormalized();
+  const rows = getCPRows('cp');
+  const totalClasses = rows.length;
+  const cancelledCount = getCPCancelledCount('cp');
+  const avgUtil = mean(rows.map(r => r.utilPct));
+  const avgPaid = mean(rows.map(r => r.paidPct));
+
+  const { start: cpStart, end: cpEnd } = getDateBounds('cp');
+  const daysInRange = Math.max(1, Math.round((new Date(cpEnd) - new Date(cpStart)) / 86400000) + 1);
+  const avgPerDay = totalClasses / daysInRange;
+
+  let compHtml = { classes: '', cancelled: '', util: '', paid: '', perDay: '' };
+  if (COMPARE_MODES.cp !== 'none') {
+    const compRows = getCPComparisonRows('cp');
+    const compBounds = getComparisonBounds('cp');
+    const compLabel = { previous_period: 'vs previous period', previous_month: 'vs previous month', last_year: 'vs same period last year' }[COMPARE_MODES.cp];
+    if (compRows.length > 0 || compBounds) {
+      const compCancelled = getCPCancelledCount('cp', undefined, compBounds);
+      const pctChange = (curr, prev) => (prev != null && prev !== 0) ? ((curr - prev) / Math.abs(prev)) * 100 : null;
+      const deltaSpan = (delta, invertColor) => { if (delta == null) return ''; const isGood = invertColor ? delta <= 0 : delta >= 0; return `<div class="ms ${isGood ? 'pos-text' : 'neg-text'}">${fPct(delta)} ${compLabel}</div>`; };
+      compHtml.classes = deltaSpan(pctChange(totalClasses, compRows.length), false);
+      compHtml.cancelled = deltaSpan(pctChange(cancelledCount, compCancelled), true);
+      const compAvgUtil = mean(compRows.map(r => r.utilPct));
+      const compAvgPaid = mean(compRows.map(r => r.paidPct));
+      compHtml.util = (avgUtil != null && compAvgUtil != null) ? `<div class="ms ${avgUtil - compAvgUtil >= 0 ? 'pos-text' : 'neg-text'}">${(avgUtil - compAvgUtil >= 0 ? '+' : '')}${(avgUtil - compAvgUtil).toFixed(1)}pp ${compLabel}</div>` : '';
+      compHtml.paid = (avgPaid != null && compAvgPaid != null) ? `<div class="ms ${avgPaid - compAvgPaid >= 0 ? 'pos-text' : 'neg-text'}">${(avgPaid - compAvgPaid >= 0 ? '+' : '')}${(avgPaid - compAvgPaid).toFixed(1)}pp ${compLabel}</div>` : '';
+      if (compBounds) {
+        const compDays = Math.max(1, Math.round((new Date(compBounds.end) - new Date(compBounds.start)) / 86400000) + 1);
+        const compAvgPerDay = compRows.length / compDays;
+        compHtml.perDay = deltaSpan(pctChange(avgPerDay, compAvgPerDay), false);
+      }
+    }
+  }
+
+  document.getElementById('cp-metrics').innerHTML = `
+    <div class="mc"><div class="ml">Number of classes</div><div class="mv">${totalClasses.toLocaleString()}</div>${compHtml.classes}</div>
+    <div class="mc"><div class="ml">Avg classes per day</div><div class="mv">${avgPerDay.toFixed(1)}</div>${compHtml.perDay}<div class="ms">Over ${daysInRange} day${daysInRange === 1 ? '' : 's'} in the selected timeframe</div></div>
+    <div class="mc neg"><div class="ml">Classes cancelled</div><div class="mv">${cancelledCount.toLocaleString()}</div>${compHtml.cancelled}<div class="ms">All cancelled sessions on the schedule — can include a class entered by mistake or a coach training session, not only genuine lost classes</div></div>
+    <div class="mc"><div class="ml">Avg utilization</div><div class="mv">${avgUtil == null ? '—' : avgUtil.toFixed(1) + '%'}</div>${compHtml.util}<div class="ms">People who actually attended (checked-in only)</div></div>
+    <div class="mc"><div class="ml">Avg paid visit %</div><div class="mv">${avgPaid == null ? '—' : avgPaid.toFixed(1) + '%'}</div>${compHtml.paid}<div class="ms">Includes late cancellations &amp; no-shows — still paid for, whether or not they attended</div></div>
+  `;
+
+  const metric = document.getElementById('cp-hm-metric').value;
+  const isCompareMode = document.getElementById('cp-compare-toggle').classList.contains('on');
+  if (isCompareMode) {
+    const checked = Array.from(document.querySelectorAll('#cp-hm-studio-checks input:checked')).map(cb => cb.value);
+    const grid = document.getElementById('cp-compare-grid');
+    grid.innerHTML = checked.map((s, i) => `
+      <div><div class="ccs" style="margin-bottom:6px">${s}</div><div class="hm-wrap"><div id="cp-heatmap-multi-${i}"></div></div></div>
+    `).join('');
+    checked.forEach((s, i) => buildHeatmap(`cp-heatmap-multi-${i}`, getCPRows('cp', s), metric));
+    if (checked.length === 0) grid.innerHTML = `<div class="empty-state">Select at least one studio above.</div>`;
+  } else {
+    buildHeatmap('cp-heatmap-single', rows, metric);
+  }
+  renderHeatLegend('cp-hm-legend-scale');
+
+  const { start: flagStart, end: flagEnd } = getDateBounds('cp');
+  const slotFlags = computeSlotFlags(rows, avgUtil, flagStart, flagEnd, PAGES.cp.studio === 'all');
+  document.getElementById('cp-flags-under').innerHTML = slotFlags.under.length
+    ? slotFlags.under.map(r => renderSlotFlagRow(r, PAGES.cp.studio === 'all')).join('')
+    : `<div class="empty-state">Nothing meaningfully underperforming for this selection.</div>`;
+  document.getElementById('cp-flags-over').innerHTML = slotFlags.over.length
+    ? slotFlags.over.map(r => renderSlotFlagRow(r, PAGES.cp.studio === 'all')).join('')
+    : `<div class="empty-state">Nothing standing out yet for this selection.</div>`;
+
+  // Weekly trend chart, from the precomputed history rollup (already
+  // scoped to studio via the studio toggle; 'all' sums across studios).
+  const st = PAGES.cp;
+  const { start, end } = getDateBounds('cp');
+  const histFiltered = CP_HISTORY_ROWS.filter(r => (st.studio === 'all' || r.studio === st.studio) && r.week >= start && r.week <= end);
+  const byWeek = new Map();
+  histFiltered.forEach(r => {
+    if (!byWeek.has(r.week)) byWeek.set(r.week, { classes: 0, utilSum: 0, utilN: 0 });
+    const e = byWeek.get(r.week);
+    e.classes += Number(r.total_classes) || 0;
+    if (r.avg_utilization != null) { e.utilSum += Number(r.avg_utilization); e.utilN += 1; }
+  });
+  const weeks = Array.from(byWeek.keys()).sort();
+  mk('chartClassHistory', { type: 'bar', data: { labels: weeks, datasets: [
+    { type: 'bar', label: 'Number of classes', data: weeks.map(w => byWeek.get(w).classes), backgroundColor: 'rgba(124,147,201,0.5)', yAxisID: 'y' },
+    { type: 'line', label: 'Avg utilization %', data: weeks.map(w => { const e = byWeek.get(w); return e.utilN ? e.utilSum / e.utilN : null; }), borderColor: C.enmei, backgroundColor: C.enmei, tension: 0.3, yAxisID: 'y1' },
+  ] }, options: { responsive: true, maintainAspectRatio: false, scales: {
+    x: xsc(), y: { ...ysc(), position: 'left' }, y1: { position: 'right', ticks: { color: C.text2, font: { size: 11 }, callback: v => v + '%' }, grid: { display: false } },
+  }, plugins: { legend: { labels: { color: C.text2, font: { size: 11 } } } } } });
+
+  // Studio comparison table -- always shows every real studio,
+  // regardless of the studio toggle above (same convention as Membership
+  // Health's studio comparison table).
+  const tbody = document.getElementById('cp-studio-compare-table-body');
+  tbody.innerHTML = CP_ALL_STUDIOS.length === 0 ? `<tr><td colspan="5" class="empty-state">No data yet.</td></tr>` :
+    CP_ALL_STUDIOS.map(studio => {
+      const sRows = getCPRows('cp', studio);
+      const sCancelled = getCPCancelledCount('cp', studio);
+      const sUtil = mean(sRows.map(r => r.utilPct));
+      const sPaid = mean(sRows.map(r => r.paidPct));
+      return `<tr><td>${studio}</td><td>${sRows.length.toLocaleString()}</td><td>${sCancelled.toLocaleString()}</td><td>${sUtil == null ? '—' : sUtil.toFixed(1) + '%'}</td><td>${sPaid == null ? '—' : sPaid.toFixed(1) + '%'}</td></tr>`;
+    }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+// RENDER: COACH PERFORMANCE
+// ════════════════════════════════════════════════════════════════
+function renderCoachPerformance() {
+  ensureCPNormalized();
+  const rows = getCPRows('cpc').filter(r => r.instructors.length > 0);
+
+  // Benchmark each class against the average for its own studio + hour
+  // slot, computed over this SAME filtered (timeframe/studio) dataset --
+  // so a coach's 7am class is judged against other 7am classes in the
+  // same window, not a busier evening slot. One row per (session,
+  // instructor) so co-taught classes count fully for each instructor.
+  const benchmarks = new Map(); // "studio|hour" -> { sum, n }
+  rows.forEach(r => {
+    const key = r.studio + '|' + r.hour;
+    if (!benchmarks.has(key)) benchmarks.set(key, { sum: 0, n: 0 });
+    if (r.utilPct != null) { const b = benchmarks.get(key); b.sum += r.utilPct; b.n += 1; }
+  });
+  const benchmarkFor = (studio, hour) => { const b = benchmarks.get(studio + '|' + hour); return b && b.n ? b.sum / b.n : null; };
+
+  const byCoach = new Map(); // "coach|studio" -> { studio, coach, n, utilSum, utilN, paidSum, paidN, liftSum, liftN, above80 }
+  rows.forEach(r => {
+    r.instructors.forEach(coach => {
+      const studioKey = PAGES.cpc.studio === 'all' ? 'All Studios' : r.studio;
+      const key = coach + '|' + studioKey;
+      if (!byCoach.has(key)) byCoach.set(key, { coach, studio: studioKey, n: 0, utilSum: 0, utilN: 0, paidSum: 0, paidN: 0, liftSum: 0, liftN: 0, above80: 0 });
+      const e = byCoach.get(key);
+      e.n += 1;
+      if (r.utilPct != null) {
+        e.utilSum += r.utilPct; e.utilN += 1;
+        if (r.utilPct >= 80) e.above80 += 1;
+        const bench = benchmarkFor(r.studio, r.hour);
+        if (bench != null) { e.liftSum += (r.utilPct - bench); e.liftN += 1; }
+      }
+      if (r.paidPct != null) { e.paidSum += r.paidPct; e.paidN += 1; }
+    });
+  });
+
+  const coachRows = Array.from(byCoach.values()).map(e => ({
+    coach: e.coach, studio: e.studio, classesTaught: e.n,
+    avgUtil: e.utilN ? e.utilSum / e.utilN : null,
+    avgPaid: e.paidN ? e.paidSum / e.paidN : null,
+    lift: e.liftN ? e.liftSum / e.liftN : null,
+    pctAbove80: e.utilN ? (e.above80 / e.utilN) * 100 : null,
+  })).sort((a, b) => (b.lift ?? -999) - (a.lift ?? -999));
+
+  const tbody = document.getElementById('cp-coach-table-body');
+  tbody.innerHTML = coachRows.length === 0 ? `<tr><td colspan="7" class="empty-state">No coach data for this selection.</td></tr>` :
+    coachRows.map(c => `<tr>
+      <td>${c.coach}</td><td>${c.studio}</td><td>${c.classesTaught}</td>
+      <td>${c.avgUtil == null ? '—' : c.avgUtil.toFixed(1) + '%'}</td>
+      <td>${c.avgPaid == null ? '—' : c.avgPaid.toFixed(1) + '%'}</td>
+      <td class="${c.lift == null ? '' : (c.lift >= 0 ? 'pos-text' : 'neg-text')}">${c.lift == null ? '—' : (c.lift >= 0 ? '+' : '') + c.lift.toFixed(1) + 'pp'}</td>
+      <td>${c.pctAbove80 == null ? '—' : c.pctAbove80.toFixed(0) + '%'}</td>
+    </tr>`).join('');
+
+  // Momentum leaderboard -- fixed 14d-vs-56d window from the precomputed
+  // CoachScorecard tab (NOT re-derived from the timeframe toggle above --
+  // see Definitions for why).
+  const withMomentum = CP_COACH_ROWS.filter(r => r.momentum_14_vs_56 != null && r.momentum_14_vs_56 !== '');
+  const sorted = withMomentum.slice().sort((a, b) => Number(b.momentum_14_vs_56) - Number(a.momentum_14_vs_56));
+  const rising = sorted.filter(r => Number(r.momentum_14_vs_56) > 0).slice(0, 5);
+  const falling = sorted.filter(r => Number(r.momentum_14_vs_56) < 0).slice(-5).reverse();
+  const momentumRow = r => `<div class="momentum-row"><span class="mr-name">${r.Instructor || r.instructor} · ${r.studio}</span><span class="mr-val ${Number(r.momentum_14_vs_56) >= 0 ? 'pos-text' : 'neg-text'}">${Number(r.momentum_14_vs_56) >= 0 ? '+' : ''}${Number(r.momentum_14_vs_56).toFixed(1)}pp</span></div>`;
+  document.getElementById('momentum-up').innerHTML = rising.length ? rising.map(momentumRow).join('') : `<div class="empty-state">No data yet.</div>`;
+  document.getElementById('momentum-down').innerHTML = falling.length ? falling.map(momentumRow).join('') : `<div class="empty-state">No data yet.</div>`;
+}
+
+// Shared by Overview and Comparison & Conversion -- filters the real
+// per-starter data by date range, studio, and intro type, and applies
+// the "Pending" reclassification for recent-enough starters. Studio only
+// meaningfully applies to 1 Week Unlimited rows -- Welcome 3 rows always
+// have studio="All Studios", so picking a specific studio naturally
+// excludes them (consistent with how studio-agnostic products are
+// handled elsewhere on this dashboard).
+function getIntroStarterRows(page, introTypeElId) {
+  const introTypeFilter = document.getElementById(introTypeElId).value;
+  const studioFilter = PAGES[page].studio;
+  const { start, end } = getDateBounds(page);
+
+  let filtered = IO_STARTER_ROWS.filter(r => r.intro_date >= start && r.intro_date <= end);
+  if (introTypeFilter !== 'all') filtered = filtered.filter(r => r.intro_type === introTypeFilter);
+  if (studioFilter !== 'all') filtered = filtered.filter(r => r.studio === studioFilter);
+
+  // Reclassify "No Further Purchase" as "Pending" for anyone whose intro
+  // offer started within the last 30 days -- they simply haven't had
+  // enough time to show their true outcome yet. Counting them the same
+  // as genuine non-converters would understate real conversion for
+  // recent cohorts. See Definitions & Methodology.
+  const todayDate = new Date();
+  function effectiveOutcome(r) {
+    if (r.outcome !== 'No Further Purchase') return r.outcome;
+    const daysSinceStart = (todayDate - new Date(r.intro_date)) / (1000 * 60 * 60 * 24);
+    return daysSinceStart < 30 ? 'Pending (recent, no outcome yet)' : 'No Further Purchase';
+  }
+  filtered = filtered.map(r => ({ ...r, outcome: effectiveOutcome(r) }));
+
+  return { filtered, introTypeFilter, studioFilter, start, end, effectiveOutcome };
+}
+function median(arr) { if (!arr.length) return null; const s = [...arr].sort((a,b)=>a-b); const m = Math.floor(s.length/2); return s.length % 2 ? s[m] : (s[m-1]+s[m])/2; }
+
+// ── Intro Offers Overview: the "how are intro offers doing overall" page.
+// Headline cards trimmed down -- the 7/30/90-day conversion-speed cards
+// moved to Comparison & Conversion, since that's a deeper cut of the
+// same conversion-timing question as the time-to-convert chart there. ──
+function renderIntroOffersOverview() {
+  const { filtered, introTypeFilter, studioFilter, start, end } = getIntroStarterRows('io', 'f-intro-type-io');
+
+  const total = filtered.length;
+  const convertedMembership = filtered.filter(r => r.outcome === 'Converted to Membership');
+  const convertedPack = filtered.filter(r => r.outcome === 'Converted to Pack');
+  const hopped = filtered.filter(r => r.outcome === 'Tried Another Intro Offer');
+  const noFurther = filtered.filter(r => r.outcome === 'No Further Purchase');
+  const pending = filtered.filter(r => r.outcome === 'Pending (recent, no outcome yet)');
+
+  document.getElementById('io-metrics').innerHTML = total === 0 ? `<div class="mc"><div class="ml">No data</div><div class="mv" style="font-size:13px">No intro offer starters in this filter combination.</div></div>` : `
+    <div class="mc"><div class="ml">Total starters</div><div class="mv">${total.toLocaleString()}</div></div>
+    <div class="mc pos"><div class="ml">Converted to membership</div><div class="mv pos-text">${(convertedMembership.length/total*100).toFixed(1)}%</div><div class="ms">${convertedMembership.length} people</div></div>
+    <div class="mc"><div class="ml">Converted to credit/class pack</div><div class="mv">${(convertedPack.length/total*100).toFixed(1)}%</div><div class="ms">${convertedPack.length} people</div></div>
+    <div class="mc"><div class="ml">Pending (started &lt;30d ago)</div><div class="mv">${(pending.length/total*100).toFixed(1)}%</div><div class="ms">${pending.length} people, no outcome yet</div></div>
+    <div class="mc neg"><div class="ml">No further purchase (30d+)</div><div class="mv neg-text">${(noFurther.length/total*100).toFixed(1)}%</div><div class="ms">${noFurther.length} people</div></div>
+    <div class="mc"><div class="ml">Tried the other intro offer</div><div class="mv">${(hopped.length/total*100).toFixed(1)}%</div><div class="ms">${hopped.length} people</div></div>
+  `;
+
+  // Sankey: first purchase type -> lifetime outcome, from the filtered set
+  const flowGroups = new Map();
+  filtered.forEach(r => {
+    const key = `${r.intro_type}|${r.outcome}`;
+    flowGroups.set(key, (flowGroups.get(key) || 0) + 1);
+  });
+  const sankeyData = Array.from(flowGroups.entries()).map(([key, count]) => {
+    const [from, to] = key.split('|');
+    return { from, to, flow: count };
+  }).filter(d => d.flow > 0);
+
+  const nodeColors = {
+    'Welcome 3': C.enmei, '1 Week Unlimited': C.slate,
+    'Converted to Membership': C.teal, 'Converted to Pack': '#7dd3c0',
+    'Tried Another Intro Offer': '#c9a86a', 'Casual Re-engagement Only': C.text2,
+    'No Further Purchase': C.neg, 'Pending (recent, no outcome yet)': '#5b6b8c',
+  };
+  if (window.Chart && sankeyData.length > 0) {
+    mk('chartIntroSankey', {
+      type: 'sankey',
+      data: { datasets: [{
+        label: 'Intro Offer Outcomes',
+        data: sankeyData,
+        colorFrom: (ctx) => nodeColors[ctx.dataset.data[ctx.dataIndex].from] || '#888',
+        colorTo: (ctx) => nodeColors[ctx.dataset.data[ctx.dataIndex].to] || '#888',
+        colorMode: 'gradient',
+        borderWidth: 0,
+      }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+    });
+  } else if (charts.chartIntroSankey) {
+    charts.chartIntroSankey.destroy();
+    delete charts.chartIntroSankey;
+  }
+
+  // Trend: starters + conversions per week -- sourced from the
+  // pre-aggregated weekly History tab (efficient, already correctly
+  // scoped by date/studio/type)
+  let historyFiltered = IO_HISTORY_ROWS.filter(r => r.week >= start && r.week <= end);
+  if (introTypeFilter !== 'all') historyFiltered = historyFiltered.filter(r => r.intro_type === introTypeFilter);
+  if (studioFilter !== 'all') historyFiltered = historyFiltered.filter(r => r.studio === studioFilter);
+
+  const trendByWeek = new Map();
+  historyFiltered.forEach(r => {
+    const wk = r.week;
+    if (!trendByWeek.has(wk)) trendByWeek.set(wk, { week: wk, starters: 0, converted_membership: 0, converted_pack: 0 });
+    const e = trendByWeek.get(wk);
+    e.starters += Number(r.starters_count) || 0;
+    e.converted_membership += Number(r.converted_membership_count) || 0;
+    e.converted_pack += Number(r.converted_pack_count) || 0;
+  });
+  const trendSeries = Array.from(trendByWeek.values()).sort((a, b) => a.week.localeCompare(b.week));
+
+  mk('chartIntroTrend', { type: 'line', data: { labels: trendSeries.map(w => w.week), datasets: [
+    { label: 'Starters', data: trendSeries.map(w => w.starters), borderColor: C.slate, backgroundColor: 'rgba(124,147,201,0.08)', fill: false, tension: .3, pointRadius: 2 },
+    { label: 'Converted (membership)', data: trendSeries.map(w => w.converted_membership), borderColor: C.teal, backgroundColor: 'rgba(45,212,191,0.08)', fill: false, tension: .3, pointRadius: 2 },
+    { label: 'Converted (pack)', data: trendSeries.map(w => w.converted_pack), borderColor: C.enmei, backgroundColor: 'rgba(232,68,42,0.08)', fill: false, tension: .3, pointRadius: 2 },
+  ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, labels: { color: C.text2, font: { size: 11 } } } }, scales: { x: xsc(), y: ysc() } } });
+}
+
+// ── Expiring & Outreach: the "who to call this week" page. No timeframe
+// toggle -- this is always "right now," a toggle here would do nothing. ──
+function renderIntroExpiring() {
+  const introTypeFilter = document.getElementById('f-intro-type-ioe').value;
+  const studioFilter = PAGES.ioe.studio;
+  const expiringViewFilter = document.getElementById('f-expiring-view').value;
+
+  let expiringFiltered = IO_EXPIRING_ROWS;
+  if (introTypeFilter !== 'all') expiringFiltered = expiringFiltered.filter(r => r.intro_type === introTypeFilter);
+  if (studioFilter !== 'all') expiringFiltered = expiringFiltered.filter(r => r.studio === studioFilter);
+  if (expiringViewFilter !== 'all') expiringFiltered = expiringFiltered.filter(r => r.tag === expiringViewFilter);
+
+  const expiringSoonTotal = IO_EXPIRING_ROWS.filter(r => r.tag === 'expiring_soon' &&
+    (introTypeFilter === 'all' || r.intro_type === introTypeFilter) && (studioFilter === 'all' || r.studio === studioFilter))
+    .reduce((s, r) => s + (Number(r.count) || 0), 0);
+  const lowUsageTotal = IO_EXPIRING_ROWS.filter(r => r.tag === 'low_usage' &&
+    (introTypeFilter === 'all' || r.intro_type === introTypeFilter) && (studioFilter === 'all' || r.studio === studioFilter))
+    .reduce((s, r) => s + (Number(r.count) || 0), 0);
+  const expiredTotal = IO_EXPIRING_ROWS.filter(r => r.tag === 'expired' &&
+    (introTypeFilter === 'all' || r.intro_type === introTypeFilter) && (studioFilter === 'all' || r.studio === studioFilter))
+    .reduce((s, r) => s + (Number(r.count) || 0), 0);
+
+  document.getElementById('io-expiring-metrics').innerHTML = `
+    <div class="mc neg"><div class="ml">Expiring soon</div><div class="mv neg-text">${expiringSoonTotal.toLocaleString()}</div><div class="ms">1 Week Unlimited: ≤3 days left. Welcome 3: ≤3 days left</div></div>
+    <div class="mc neg"><div class="ml">Low usage (Welcome 3 only)</div><div class="mv neg-text">${lowUsageTotal.toLocaleString()}</div><div class="ms">≤1 class remaining -- hot lead, used it fast</div></div>
+    <div class="mc"><div class="ml">Recently expired (30d)</div><div class="mv">${expiredTotal.toLocaleString()}</div><div class="ms">Safety net for gaps between weekly outreach runs</div></div>
+  `;
+
+  const expiringTbody = document.getElementById('io-expiring-body');
+  expiringTbody.innerHTML = expiringFiltered.length === 0 ? `<tr><td colspan="5" class="empty-state">No one in this category for the current filters.</td></tr>` :
+    expiringFiltered.sort((a, b) => Number(a.avg_days_until_expiration) - Number(b.avg_days_until_expiration)).map(r =>
+      `<tr><td>${r.intro_type}</td><td>${r.studio}</td><td>${r.tag.replace(/_/g,' ')}</td><td>${r.count}</td><td>${r.avg_days_until_expiration}</td></tr>`
+    ).join('');
+}
+
+// ── Comparison & Conversion: 1 Week Unlimited vs. Welcome 3, attendance
+// correlation, and time-to-convert -- all "dig deeper" analytical
+// content grouped on one page rather than a daily check. ──
+function renderIntroComparison() {
+  const { filtered, introTypeFilter, studioFilter, start, end, effectiveOutcome } = getIntroStarterRows('ioc', 'f-intro-type-ioc');
+
+  const convertedMembership = filtered.filter(r => r.outcome === 'Converted to Membership');
+  const daysToConvert = convertedMembership.map(r => Number(r.days_to_convert)).filter(d => !isNaN(d));
+  // Cumulative % of converters who converted within N days -- more
+  // useful than a single raw median for comparing urgency of follow-up
+  const pctWithin = n => daysToConvert.length ? (daysToConvert.filter(d => d <= n).length / daysToConvert.length * 100) : null;
+
+  document.getElementById('io-speed-metrics').innerHTML = `
+    <div class="mc"><div class="ml">Converted within 7 days</div><div class="mv">${pctWithin(7) != null ? pctWithin(7).toFixed(0) + '%' : '—'}</div><div class="ms">of ${convertedMembership.length} converters</div></div>
+    <div class="mc"><div class="ml">Converted within 30 days</div><div class="mv">${pctWithin(30) != null ? pctWithin(30).toFixed(0) + '%' : '—'}</div><div class="ms">of ${convertedMembership.length} converters</div></div>
+    <div class="mc"><div class="ml">Converted within 90 days</div><div class="mv">${pctWithin(90) != null ? pctWithin(90).toFixed(0) + '%' : '—'}</div><div class="ms">of ${convertedMembership.length} converters</div></div>
+  `;
+
+  // Time to convert histogram
+  document.getElementById('time-to-convert-sub').textContent =
+    `Of the ${convertedMembership.length.toLocaleString()} client${convertedMembership.length === 1 ? '' : 's'} who started an intro offer in this timeframe and went on to convert to a membership -- however long that took, even beyond the timeframe window. "Timeframe" here filters by when the intro offer STARTED, not when they converted.`;
+
+  const bucketLabels = ['0-7 days', '8-30 days', '31-90 days', '90+ days'];
+  const bucketCounts = [
+    daysToConvert.filter(d => d >= 0 && d <= 7).length,
+    daysToConvert.filter(d => d >= 8 && d <= 30).length,
+    daysToConvert.filter(d => d >= 31 && d <= 90).length,
+    daysToConvert.filter(d => d > 90).length,
+  ];
+  const bucketData = bucketCounts.map(c => daysToConvert.length ? (c / daysToConvert.length * 100) : 0);
+  mk('chartTimeToConvert', { type: 'bar', data: { labels: bucketLabels, datasets: [{ data: bucketData, backgroundColor: C.teal, borderRadius: 4, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `${ctx.parsed.y.toFixed(0)}% (${bucketCounts[ctx.dataIndex]} people)` } } },
+      scales: { x: xsc(), y: { ...ysc(), ticks: { ...ysc().ticks, callback: v => v + '%' } } } } });
+
+  // Attendance stats + conversion-by-attendance -- bucket definitions
+  // differ per intro type (Welcome 3 is a 3-credit pack, 1 Week Unlimited
+  // is unlimited), so when "Both types" is selected, default to 1 Week
+  // Unlimited (the stronger, cleaner signal).
+  const attendanceIntroType = introTypeFilter === 'all' ? '1 Week Unlimited' : introTypeFilter;
+  const attendanceRows = filtered.filter(r => r.intro_type === attendanceIntroType);
+  document.getElementById('attendance-sub').textContent = introTypeFilter === 'all'
+    ? `Real check-in data, for the selected date range/studio. Showing 1 Week Unlimited (defaulting from "Both types") -- switch the intro type dropdown above to see Welcome 3 instead.`
+    : `Real check-in data, for the selected date range/studio, for ${attendanceIntroType}.`;
+
+  const classesAttendedArr = attendanceRows.map(r => Number(r.classes_attended) || 0);
+  const avgClasses = classesAttendedArr.length ? (classesAttendedArr.reduce((a,b)=>a+b,0)/classesAttendedArr.length) : null;
+  document.getElementById('io-attendance-stats').innerHTML = `
+    <div class="mc"><div class="ml">Avg classes attended</div><div class="mv">${avgClasses != null ? avgClasses.toFixed(2) : '—'}</div></div>
+    <div class="mc"><div class="ml">Median classes attended</div><div class="mv">${median(classesAttendedArr) != null ? median(classesAttendedArr) : '—'}</div></div>
+    <div class="mc"><div class="ml">Avg days between visits</div><div class="mv" style="font-size:14px;color:var(--text3)">All-time only*</div></div>
+    <div class="mc"><div class="ml">Median days between visits</div><div class="mv" style="font-size:14px;color:var(--text3)">All-time only*</div></div>
+  `;
+
+  function bucketOneWeek(n) { if (n === 0) return "0 (never attended)"; if (n <= 2) return "1-2"; if (n <= 4) return "3-4"; if (n <= 6) return "5-6"; return "7+"; }
+  function bucketWelcome3(n) { if (n === 0) return "0 (never attended)"; if (n === 1) return "1"; if (n === 2) return "2"; if (n === 3) return "3 (used it all)"; return "4+"; }
+  const bucketFn = attendanceIntroType === 'Welcome 3' ? bucketWelcome3 : bucketOneWeek;
+  const bucketOrder = attendanceIntroType === 'Welcome 3' ? ['0 (never attended)','1','2','3 (used it all)','4+'] : ['0 (never attended)','1-2','3-4','5-6','7+'];
+
+  const bucketGroups = new Map();
+  attendanceRows.forEach(r => {
+    const b = bucketFn(Number(r.classes_attended) || 0);
+    if (!bucketGroups.has(b)) bucketGroups.set(b, { total: 0, converted: 0 });
+    const g = bucketGroups.get(b);
+    g.total++;
+    if (r.outcome === 'Converted to Membership') g.converted++;
+  });
+  const attendanceChartRows = bucketOrder.filter(b => bucketGroups.has(b)).map(b => {
+    const g = bucketGroups.get(b);
+    return { bucket: b, count: g.total, conversion_pct: g.total > 0 ? (g.converted / g.total * 100) : 0 };
+  });
+
+  mk('chartAttendanceConversion', { type: 'bar', data: {
+    labels: attendanceChartRows.map(r => `${r.bucket} (n=${r.count})`),
+    datasets: [{ data: attendanceChartRows.map(r => Math.round(r.conversion_pct * 10) / 10), backgroundColor: C.enmei, borderRadius: 4, borderSkipped: false }],
+  }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false },
+    tooltip: { callbacks: { label: ctx => `Conversion: ${ctx.parsed.y}%` } } },
+    scales: { x: xsc(), y: { ...ysc(), ticks: { ...ysc().ticks, callback: v => v + '%' } } } } });
+
+  // ── Head-to-head + studio comparison tables. Both always respect date
+  // range, but deliberately ignore certain toggles so they can show a
+  // real side-by-side comparison regardless of what's currently selected
+  // for the rest of the page. The duplicate bar-chart version of this
+  // table was removed -- it showed the exact same numbers as the table
+  // immediately above it, just as a chart instead. ──
+  const dateFilteredOnly = IO_STARTER_ROWS.filter(r => r.intro_date >= start && r.intro_date <= end).map(r => ({ ...r, outcome: effectiveOutcome(r) }));
+
+  function computeOutcomeStats(rows) {
+    const total = rows.length;
+    if (total === 0) return null;
+    const convMem = rows.filter(r => r.outcome === 'Converted to Membership');
+    const convPack = rows.filter(r => r.outcome === 'Converted to Pack');
+    const hop = rows.filter(r => r.outcome === 'Tried Another Intro Offer');
+    const cas = rows.filter(r => r.outcome === 'Casual Re-engagement Only');
+    const noF = rows.filter(r => r.outcome === 'No Further Purchase');
+    const days = convMem.map(r => Number(r.days_to_convert)).filter(d => !isNaN(d));
+    const within30 = days.length ? (days.filter(d => d <= 30).length / days.length * 100) : null;
+    return {
+      total, convMemPct: convMem.length / total * 100, convPackPct: convPack.length / total * 100,
+      hopPct: hop.length / total * 100, casPct: cas.length / total * 100, noFPct: noF.length / total * 100,
+      within30,
+    };
+  }
+
+  function renderComparisonRow(label, stats) {
+    if (!stats) return `<tr><td>${label}</td><td colspan="7" class="empty-state">No data</td></tr>`;
+    return `<tr>
+      <td>${label}</td><td>${stats.total.toLocaleString()}</td>
+      <td class="pos-text">${stats.convMemPct.toFixed(1)}%</td><td>${stats.convPackPct.toFixed(1)}%</td>
+      <td>${stats.hopPct.toFixed(1)}%</td><td>${stats.casPct.toFixed(1)}%</td>
+      <td class="neg-text">${stats.noFPct.toFixed(1)}%</td>
+      <td>${stats.within30 != null ? stats.within30.toFixed(0) + '%' : '—'}</td>
+    </tr>`;
+  }
+
+  // Head-to-head: ignores the intro-type dropdown (needs both to compare), respects studio + date range
+  const oneWeekStats = computeOutcomeStats((studioFilter === 'all' ? dateFilteredOnly : dateFilteredOnly.filter(r => r.studio === studioFilter)).filter(r => r.intro_type === '1 Week Unlimited'));
+  const welcome3Stats = computeOutcomeStats(dateFilteredOnly.filter(r => r.intro_type === 'Welcome 3'));
+  document.getElementById('io-headtohead-body').innerHTML =
+    renderComparisonRow('1 Week Unlimited', oneWeekStats) + renderComparisonRow('Welcome 3', welcome3Stats);
+
+  // Studio breakdown: always 1 Week Unlimited only, ignores studio toggle, respects date range
+  const oneWeekOnly = dateFilteredOnly.filter(r => r.intro_type === '1 Week Unlimited');
+  const chelseaStats = computeOutcomeStats(oneWeekOnly.filter(r => r.studio === 'Chelsea'));
+  const maryStats = computeOutcomeStats(oneWeekOnly.filter(r => r.studio === 'Marylebone'));
+  document.getElementById('io-studio-body').innerHTML =
+    renderComparisonRow('Chelsea', chelseaStats) + renderComparisonRow('Marylebone', maryStats);
+}
+
+
+async function init() {
+  const loading = document.getElementById('loading');
+  const status = document.getElementById('sync-status');
+  try {
+    const [historyTable, liveTable, pyramidTable, logTable] = await Promise.all([
+      fetchSheet('Membership_History'), fetchSheet('Membership_Live_Status'),
+      fetchSheet('Membership_Age_Pyramid'), fetchSheet('Membership_Customer_Log'),
+    ]);
+    HISTORY_ROWS = parseGvizTable(historyTable);
+    LIVE_ROWS = parseGvizTable(liveTable);
+    AGE_PYRAMID_ROWS = parseGvizTable(pyramidTable);
+    CUSTOMER_LOG_ROWS = parseGvizTable(logTable);
+
+    // Intro Offers tabs -- fetched separately with allSettled so a
+    // problem here doesn't take down the rest of the dashboard
+    const [ioLiveResult, ioHistoryResult, ioFlowResult, ioAttendanceResult, ioStarterResult, ioExpiringResult, ssPerfResult, ssExpResult] = await Promise.allSettled([
+      fetchSheet('IntroOffers_Live'), fetchSheet('IntroOffers_History'), fetchSheet('IntroOffers_Flow'),
+      fetchSheet('IntroOffers_Attendance'), fetchSheet('IntroOffers_Starters'), fetchSheet('IntroOffers_Expiring'),
+      fetchSheet('SummerStrong_Performance'), fetchSheet('SummerStrong_Expiring'),
+    ]);
+    IO_LIVE_ROWS = ioLiveResult.status === 'fulfilled' ? parseGvizTable(ioLiveResult.value) : [];
+    IO_HISTORY_ROWS = ioHistoryResult.status === 'fulfilled' ? parseGvizTable(ioHistoryResult.value) : [];
+    IO_FLOW_ROWS = ioFlowResult.status === 'fulfilled' ? parseGvizTable(ioFlowResult.value) : [];
+    IO_ATTENDANCE_ROWS = ioAttendanceResult.status === 'fulfilled' ? parseGvizTable(ioAttendanceResult.value) : [];
+    IO_STARTER_ROWS = ioStarterResult.status === 'fulfilled' ? parseGvizTable(ioStarterResult.value) : [];
+    IO_EXPIRING_ROWS = ioExpiringResult.status === 'fulfilled' ? parseGvizTable(ioExpiringResult.value) : [];
+    SS_PERFORMANCE_ROWS = ssPerfResult.status === 'fulfilled' ? parseGvizTable(ssPerfResult.value) : [];
+    SS_EXPIRING_ROWS = ssExpResult.status === 'fulfilled' ? parseGvizTable(ssExpResult.value) : [];
+    if (ioLiveResult.status === 'rejected') console.error('IntroOffers_Live load error:', ioLiveResult.reason);
+
+    // Class Performance tabs -- also non-blocking, same reasoning as Intro
+    // Offers: a problem here shouldn't take down Membership Health etc.
+    const [cpSessionsResult, cpHistoryResult, cpCoachResult, cpCancelResult] = await Promise.allSettled([
+      fetchSheet('ClassPerformance_Sessions'), fetchSheet('ClassPerformance_History'),
+      fetchSheet('ClassPerformance_CoachScorecard'), fetchSheet('ClassPerformance_Cancellations'),
+    ]);
+    CP_SESSION_ROWS = cpSessionsResult.status === 'fulfilled' ? parseGvizTable(cpSessionsResult.value) : [];
+    CP_HISTORY_ROWS = cpHistoryResult.status === 'fulfilled' ? parseGvizTable(cpHistoryResult.value) : [];
+    CP_COACH_ROWS = cpCoachResult.status === 'fulfilled' ? parseGvizTable(cpCoachResult.value) : [];
+    CP_CANCEL_ROWS = cpCancelResult.status === 'fulfilled' ? parseGvizTable(cpCancelResult.value) : [];
+    if (cpSessionsResult.status === 'rejected') console.error('ClassPerformance_Sessions load error:', cpSessionsResult.reason);
+
+    status.textContent = `Live · ${HISTORY_ROWS.length} history rows · ${LIVE_ROWS.length} current rows`;
+    status.classList.add('ok');
+    loading.classList.add('hidden');
+    populateFilters();
+    document.getElementById('as-of-date-cdd').value = toISO(new Date());
+    document.getElementById('as-of-date-cdd').addEventListener('change', renderChurnDeepDive);
+    renderOverview();
+    renderRevenue();
+    renderChurnOverview();
+    renderChurnAtRisk();
+    renderChurnDeepDive();
+    renderIntroOffersOverview();
+    renderIntroExpiring();
+    renderIntroComparison();
+    renderSummerStrong();
+    renderClassPerformance();
+    renderCoachPerformance();
+  } catch (e) {
+    console.error('Sheet load error:', e);
+    loading.classList.add('hidden');
+    status.textContent = 'Sheet error — see console';
+    status.classList.add('err');
+    document.getElementById('ov-metrics').innerHTML = `<div class="mc"><div class="ml">Error</div><div class="mv" style="font-size:13px">${e.message}</div></div>`;
+  }
+}
+init();
+</script>
+</body>
+</html>
