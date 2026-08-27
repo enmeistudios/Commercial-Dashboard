@@ -38,6 +38,12 @@ TAB_INTRO_EXPIRING = "IntroOffers_Expiring"
 
 TAB_SUMMER_STRONG_PERFORMANCE = "SummerStrong_Performance"
 TAB_SUMMER_STRONG_EXPIRING = "SummerStrong_Expiring"
+# Per-customer detail, ID-only (no names) -- same treatment as
+# Membership_Customer_Log and the At Risk/Term Ending list. Added because
+# Summer Strong, unlike 1 Week Unlimited/Welcome 3, has no existing
+# outreach automation sending a real client list -- without this, there
+# was genuinely no way to know who to reach out to before it expires.
+TAB_SUMMER_STRONG_EXPIRING_DETAIL = "SummerStrong_Expiring_Detail"
 
 # Class Performance -- see build_class_performance_dashboard_data.py.
 # TAB_CLASS_SESSIONS is the granular ID-only per-class-session log (mirrors
