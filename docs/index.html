@@ -839,6 +839,20 @@ tbody tr:hover td{background:var(--bg3)}
       </table>
     </div>
   </div>
+
+  <div class="tc" style="margin-top:16px">
+    <div class="tch">
+      <span class="tct">Who to reach out to</span>
+      <span class="ccs" style="margin:0">ID-only, no names -- staff look up customer_id directly in Mariana Tek. Unlike 1 Week Unlimited/Welcome 3, Summer Strong has no existing outreach automation -- this list is the actionable one.</span>
+    </div>
+    <div style="padding:10px 18px"><button onclick="exportSummerStrongCSV()" style="background:var(--enmei);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">Export CSV</button></div>
+    <div class="tscroll">
+      <table id="ss-expiring-detail-table">
+        <thead><tr><th>Customer ID</th><th>Studio</th><th>Tag</th><th>Start Date</th><th>Expiration Date</th><th>Days Until Expiration</th></tr></thead>
+        <tbody id="ss-expiring-detail-body"></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <div class="page" id="page-io-definitions">
@@ -1160,6 +1174,22 @@ function exportTermEndCSV() {
   a.click();
   URL.revokeObjectURL(url);
 }
+// Same ID-only export pattern as At Risk/Term Ending -- added because
+// Summer Strong, unlike 1 Week Unlimited/Welcome 3, has no existing
+// outreach automation sending a real client list.
+function exportSummerStrongCSV() {
+  const rows = SS_EXPIRING_DETAIL_ROWS;
+  const header = ['customer_id', 'studio', 'tag', 'start_date', 'expiration_date', 'days_until_expiration'];
+  const csvLines = [header.join(',')];
+  rows.forEach(r => csvLines.push([r.customer_id, r.studio, r.tag, r.start_date, r.expiration_date, r.days_until_expiration].join(',')));
+  const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `summer_strong_expiring_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 function toggleRiskDetail() {
   const body = document.getElementById('risk-detail-body');
   const arrow = document.getElementById('risk-toggle-arrow');
@@ -1233,7 +1263,7 @@ function toISO(d) { return d.toISOString().slice(0, 10); }
 // ════════════════════════════════════════════════════════════════
 let HISTORY_ROWS = [], LIVE_ROWS = [], AGE_PYRAMID_ROWS = [], CUSTOMER_LOG_ROWS = [], ALL_STUDIOS = [];
 let IO_LIVE_ROWS = [], IO_HISTORY_ROWS = [], IO_FLOW_ROWS = [], IO_ATTENDANCE_ROWS = [], IO_STARTER_ROWS = [], IO_EXPIRING_ROWS = [], IO_ALL_STUDIOS = [];
-let SS_PERFORMANCE_ROWS = [], SS_EXPIRING_ROWS = [];
+let SS_PERFORMANCE_ROWS = [], SS_EXPIRING_ROWS = [], SS_EXPIRING_DETAIL_ROWS = [];
 let CP_SESSION_ROWS = [], CP_HISTORY_ROWS = [], CP_COACH_ROWS = [], CP_CANCEL_ROWS = [], CP_ALL_STUDIOS = [];
 
 const PAGES = {
@@ -2009,6 +2039,17 @@ function renderSummerStrong() {
     SS_EXPIRING_ROWS.sort((a, b) => Number(a.avg_days_until_expiration) - Number(b.avg_days_until_expiration)).map(r =>
       `<tr><td>${r.studio}</td><td>${r.tag.replace(/_/g,' ')}</td><td>${r.count}</td><td>${r.avg_days_until_expiration}</td></tr>`
     ).join('');
+
+  // Per-customer detail, the actionable outreach list (no automation
+  // covers Summer Strong the way it does for 1 Week Unlimited/Welcome 3)
+  const ssExpDetailBody = document.getElementById('ss-expiring-detail-body');
+  ssExpDetailBody.innerHTML = SS_EXPIRING_DETAIL_ROWS.length === 0 ? `<tr><td colspan="6" class="empty-state">No one currently expiring soon or recently expired.</td></tr>` :
+    SS_EXPIRING_DETAIL_ROWS.slice().sort((a, b) => Number(a.days_until_expiration) - Number(b.days_until_expiration)).map(r =>
+      `<tr><td>${r.customer_id || '—'}</td><td>${r.studio || '—'}</td><td>${(r.tag || '').replace(/_/g,' ')}</td>
+       <td>${r.start_date ? new Date(r.start_date).toISOString().slice(0,10) : '—'}</td>
+       <td>${r.expiration_date ? new Date(r.expiration_date).toISOString().slice(0,10) : '—'}</td>
+       <td>${r.days_until_expiration}</td></tr>`
+    ).join('');
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2704,10 +2745,10 @@ async function init() {
 
     // Intro Offers tabs -- fetched separately with allSettled so a
     // problem here doesn't take down the rest of the dashboard
-    const [ioLiveResult, ioHistoryResult, ioFlowResult, ioAttendanceResult, ioStarterResult, ioExpiringResult, ssPerfResult, ssExpResult] = await Promise.allSettled([
+    const [ioLiveResult, ioHistoryResult, ioFlowResult, ioAttendanceResult, ioStarterResult, ioExpiringResult, ssPerfResult, ssExpResult, ssExpDetailResult] = await Promise.allSettled([
       fetchSheet('IntroOffers_Live'), fetchSheet('IntroOffers_History'), fetchSheet('IntroOffers_Flow'),
       fetchSheet('IntroOffers_Attendance'), fetchSheet('IntroOffers_Starters'), fetchSheet('IntroOffers_Expiring'),
-      fetchSheet('SummerStrong_Performance'), fetchSheet('SummerStrong_Expiring'),
+      fetchSheet('SummerStrong_Performance'), fetchSheet('SummerStrong_Expiring'), fetchSheet('SummerStrong_Expiring_Detail'),
     ]);
     IO_LIVE_ROWS = ioLiveResult.status === 'fulfilled' ? parseGvizTable(ioLiveResult.value) : [];
     IO_HISTORY_ROWS = ioHistoryResult.status === 'fulfilled' ? parseGvizTable(ioHistoryResult.value) : [];
@@ -2717,6 +2758,7 @@ async function init() {
     IO_EXPIRING_ROWS = ioExpiringResult.status === 'fulfilled' ? parseGvizTable(ioExpiringResult.value) : [];
     SS_PERFORMANCE_ROWS = ssPerfResult.status === 'fulfilled' ? parseGvizTable(ssPerfResult.value) : [];
     SS_EXPIRING_ROWS = ssExpResult.status === 'fulfilled' ? parseGvizTable(ssExpResult.value) : [];
+    SS_EXPIRING_DETAIL_ROWS = ssExpDetailResult.status === 'fulfilled' ? parseGvizTable(ssExpDetailResult.value) : [];
     if (ioLiveResult.status === 'rejected') console.error('IntroOffers_Live load error:', ioLiveResult.reason);
 
     // Class Performance tabs -- also non-blocking, same reasoning as Intro
