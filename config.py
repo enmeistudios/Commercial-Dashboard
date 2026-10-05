@@ -6,13 +6,23 @@ Shared constants for the Enmei Commercial Dashboard project.
 
 BASE_URL = "https://enmei.marianatek.com/api"
 
-# Studio locations. Shoreditch is now confirmed live (real membership
-# instances exist for it as of the transition to real historical data).
-STUDIOS = [
-    "Chelsea",
-    "Marylebone",
-    "Shoreditch",
-]
+# Studio locations: name -> Mariana Tek location ID. This is the ONE place
+# to add a new studio for the parts of the pipeline that need an explicit
+# location ID (currently the class-cancellation pull in
+# build_class_performance_dashboard_data.py). Everything else -- Membership
+# Health, Intro Offers, the Class Performance report itself, and every
+# studio tab/filter on the dashboard -- picks new studios up automatically
+# from the data once they have any.
+#
+# Names must match Mariana Tek's location names exactly.
+LOCATIONS = {
+    "Chelsea": 48717,
+    "Marylebone": 48750,
+    "Shoreditch": 48783,
+    "Canary Wharf": 48816,
+    # "London Bridge": <add once it exists in Mariana Tek>,
+}
+STUDIOS = list(LOCATIONS)
 
 # Google Sheet used as the dashboard's data layer. Shared with the
 # commercial-dashboard service account (Editor access) and published to
