@@ -789,7 +789,7 @@ tbody tr:hover td{background:var(--bg3)}
   <div style="height:16px"></div>
 
   <div class="tc">
-    <div class="tch"><span class="tct">1 Week Unlimited by studio</span><span class="ccs" style="margin:0">Chelsea vs. Marylebone -- always shows both, ignores the studio toggle above. Welcome 3 has no studio breakdown (studio-agnostic by design)</span></div>
+    <div class="tch"><span class="tct">1 Week Unlimited by studio</span><span class="ccs" style="margin:0">Every studio side by side -- ignores the studio toggle above. Welcome 3 has no studio breakdown (studio-agnostic by design)</span></div>
     <div class="tscroll">
       <table id="io-studio-table">
         <thead><tr><th>Studio</th><th>Starters</th><th>Converted (membership)</th><th>Converted (pack)</th><th>Hopped</th><th>Casual Only</th><th>No Further</th><th>Converted within 30d</th></tr></thead>
@@ -2723,10 +2723,11 @@ function renderIntroComparison() {
 
   // Studio breakdown: always 1 Week Unlimited only, ignores studio toggle, respects date range
   const oneWeekOnly = dateFilteredOnly.filter(r => r.intro_type === '1 Week Unlimited');
-  const chelseaStats = computeOutcomeStats(oneWeekOnly.filter(r => r.studio === 'Chelsea'));
-  const maryStats = computeOutcomeStats(oneWeekOnly.filter(r => r.studio === 'Marylebone'));
-  document.getElementById('io-studio-body').innerHTML =
-    renderComparisonRow('Chelsea', chelseaStats) + renderComparisonRow('Marylebone', maryStats);
+  // One row per real studio, built from the data (not a hardcoded list), so
+  // new studios like Canary Wharf appear here automatically.
+  document.getElementById('io-studio-body').innerHTML = IO_ALL_STUDIOS.length === 0
+    ? `<tr><td colspan="8" class="empty-state">No studio data yet.</td></tr>`
+    : IO_ALL_STUDIOS.map(studio => renderComparisonRow(studio, computeOutcomeStats(oneWeekOnly.filter(r => r.studio === studio)))).join('');
 }
 
 
