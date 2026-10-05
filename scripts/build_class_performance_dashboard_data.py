@@ -138,7 +138,7 @@ from google.oauth2.service_account import Credentials
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import (
-    DASHBOARD_SHEET_ID,
+    DASHBOARD_SHEET_ID, LOCATIONS,
     TAB_CLASS_SESSIONS, TAB_CLASS_HISTORY, TAB_COACH_SCORECARD, TAB_CLASS_CANCELLATIONS,
 )
 
@@ -493,7 +493,7 @@ def main():
     print(f"Report 294: {len(sessions_df)} real class-session rows after cleaning.")
 
     print("\nPulling class_sessions (all locations, for cancellation counts)...")
-    locations = {"Chelsea": 48717, "Marylebone": 48750, "Shoreditch": 48783}
+    locations = LOCATIONS  # defined in config.py -- add new studios there
     raw_sessions = pull_all_class_sessions(locations)
     cancellations_df = build_cancellations_history(raw_sessions, HISTORY_START)
     print(f"class_sessions: {cancellations_df['cancelled_classes'].sum()} total cancelled classes found since {HISTORY_START}.")

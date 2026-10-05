@@ -114,7 +114,17 @@ EXPIRING_REPORT_IDS = {"1 Week Unlimited": 361, "Welcome 3": 358}
 # lookups (the report's "Credit"/"Membership" columns show internal catalog
 # names, not customer-facing labels like "Welcome 3" -- so we filter by ID,
 # not by text). See module docstring for the accepted Welcome 3 edge-case gap.
-ONE_WEEK_UNLIMITED_MEMBERSHIP_IDS = {2921, 3215}  # Chelsea, Marylebone
+# One 1 Week Unlimited product per studio (catalog names "1 Week
+# Unlimited/<studio>", from the memberships list). A new studio's product
+# must be added here or its attendance data is silently missing from the
+# attendance charts. Shoreditch (3549) was missing from this list until
+# Canary Wharf was set up; London Bridge will need its own ID added too.
+ONE_WEEK_UNLIMITED_MEMBERSHIP_IDS = {
+    2921,  # Chelsea
+    3215,  # Marylebone
+    3549,  # Shoreditch
+    3644,  # Canary Wharf
+}
 WELCOME_3_CREDIT_ID = 2356
 RESERVATIONS_REPORT_ID = 341
 CASUAL_NAMES = {"single", "1 credit"}
