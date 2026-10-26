@@ -13,6 +13,16 @@ on:
         options:
           - 'false'
           - 'true'
+      compare_days:
+        description: 'Days of history to compare against report 294 (default 56). Use 700 for a full-history check.'
+        required: false
+        default: '56'
+        type: string
+      history_start:
+        description: 'Optional: shorten a TEST run by starting from this date (YYYY-MM-DD, e.g. 2026-08-01). Only works with debug_only=true. Leave blank for full history.'
+        required: false
+        default: ''
+        type: string
 jobs:
   refresh-data:
     runs-on: ubuntu-latest
@@ -32,4 +42,6 @@ jobs:
           MARIANA_BASE_URL: ${{ secrets.MARIANA_BASE_URL }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           DEBUG_ONLY_SKIP_SHEET_WRITE: ${{ github.event.inputs.debug_only || 'false' }}
+          CP_COMPARE_DAYS: ${{ github.event.inputs.compare_days || '56' }}
+          CP_RAW_HISTORY_START: ${{ github.event.inputs.history_start || '' }}
         run: python scripts/build_class_performance_raw.py
