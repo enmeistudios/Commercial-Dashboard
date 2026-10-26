@@ -1,4 +1,10 @@
 """
+NOTE: the report-294 fetching in this file is DEPRECATED and no longer run by
+any workflow. The live pipeline is build_class_performance_raw.py, which builds
+the same table from Mariana Tek's raw data and reuses this file's cleaning,
+history and coach-scorecard functions (clean_sessions_df, build_class_history,
+build_coach_scorecard, build_cancellations_history, write_to_sheet).
+
 build_class_performance_dashboard_data.py
 
 Coach performance + class utilization, backing the Class Performance

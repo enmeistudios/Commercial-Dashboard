@@ -1,18 +1,20 @@
 """
-Class Performance -- RAW-DATA version.
+Class Performance -- the pipeline of record.
 
-Rebuilds the exact same session table that report 294 ("Class Session
-Utilization Details") produces, but from Mariana Tek's raw endpoints
-(class_sessions, reservations, spot_holds), so the dashboard no longer
-depends on the pre-built table reports. Everything downstream (cleaning,
-weekly history, coach scorecard, cancellations) is REUSED, unchanged,
-from build_class_performance_dashboard_data.py -- only the source of the
-session table is new.
+Builds the dashboard's session table from Mariana Tek's RAW endpoints
+(class_sessions, reservations, spot_holds) instead of the pre-built table
+report 294 (which is being retired). The result has exactly the same
+columns report 294 produced -- validated class by class over the full
+history (18,326 classes, every compared column 100%) -- so everything
+downstream (cleaning, weekly history, coach scorecard, cancellations) is
+shared, unchanged, with build_class_performance_dashboard_data.py, whose
+report-fetching code is now unused and kept only as a library.
 
-Writes to separate ClassPerformanceRaw_* tabs, so the live dashboard is
-untouched until the two versions have been compared and trusted. A
-comparison against report 294 is written to ClassPerformanceRaw_Compare*
-(skipped automatically once report access is gone).
+Writes the normal ClassPerformance_* tabs the dashboard reads.
+
+An OPTIONAL comparison against report 294 can still be run while report
+access lasts (set CP_COMPARE_DAYS, e.g. via the workflow's compare_days
+input); it skips itself automatically once the report is gone.
 
 HOW EACH REPORT COLUMN IS REBUILT (validated against report 294 on a full
 week of Marylebone: 86 report rows vs 86 raw sessions, all matched):
@@ -66,8 +68,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import build_class_performance_dashboard_data as base  # noqa: E402
 from config import (  # noqa: E402
     LOCATIONS, INSTRUCTOR_NAME_OVERRIDES,
-    TAB_CLASS_SESSIONS_RAW, TAB_CLASS_HISTORY_RAW, TAB_COACH_SCORECARD_RAW,
-    TAB_CLASS_CANCELLATIONS_RAW, TAB_CLASS_COMPARE_SUMMARY, TAB_CLASS_COMPARE_DETAIL,
+    TAB_CLASS_SESSIONS, TAB_CLASS_HISTORY, TAB_COACH_SCORECARD,
+    TAB_CLASS_CANCELLATIONS, TAB_CLASS_COMPARE_SUMMARY, TAB_CLASS_COMPARE_DETAIL,
 )
 
 # Every reservation status we know about. Anything else seen in the data is
@@ -78,6 +80,10 @@ KNOWN_STATUSES = {
     "check in", "standard cancel", "graced cancel", "penalty cancel",
     "penalty no show", "graced no show", "no fee no show",
     "removed", "class cancelled", "pending",
+    # A staff removal that carried a penalty. Report 294 does not count it as
+    # a late cancel or no-show (verified: 100% parity without counting it),
+    # and there are only a handful (4 in 22 months). Known, deliberately not counted.
+    "penalty removed",
 }
 
 PAGE_SIZE = int(os.environ.get("CP_RAW_PAGE_SIZE", "500"))
@@ -275,7 +281,7 @@ def instructors_text(value):
     if value is None:
         return ""
     parts = list(value) if isinstance(value, (list, tuple)) else str(value).split(",")
-    return ", ".join(first_name(p) for p in parts if str(p).strip())
+    return ",".join(first_name(p) for p in parts if str(p).strip())
 
 
 def build_raw_frames(start, end):
@@ -320,7 +326,7 @@ def build_raw_frames(start, end):
             profile_ids = rel_ids(rec, "employee_public_profiles")
             shown = [display_names[i] for i in profile_ids if i in display_names]
             if profile_ids and len(shown) == len(profile_ids):
-                instructors = ", ".join(shown)
+                instructors = ",".join(shown)
                 name_source["schedule display name"] += 1
             else:
                 instructors = instructors_text(at.get("instructor_names"))
@@ -479,7 +485,7 @@ def main():
     end_date = date.today().isoformat()
     custom_start = os.environ.get("CP_RAW_HISTORY_START", "").strip()
     start_date = custom_start or base.HISTORY_START
-    compare_days = int(os.environ.get("CP_COMPARE_DAYS", "56"))
+    compare_days = int(os.environ.get("CP_COMPARE_DAYS", "0"))
 
     raw_sessions, cancelled = build_raw_frames(start_date, end_date)
     sessions_df = base.clean_sessions_df(raw_sessions)
@@ -511,10 +517,10 @@ def main():
         print(cancellations_df.tail(12).to_string())
         return
 
-    base.write_to_sheet(sessions_export, TAB_CLASS_SESSIONS_RAW)
-    base.write_to_sheet(history_df, TAB_CLASS_HISTORY_RAW)
-    base.write_to_sheet(scorecard_df, TAB_COACH_SCORECARD_RAW)
-    base.write_to_sheet(cancellations_df, TAB_CLASS_CANCELLATIONS_RAW)
+    base.write_to_sheet(sessions_export, TAB_CLASS_SESSIONS)
+    base.write_to_sheet(history_df, TAB_CLASS_HISTORY)
+    base.write_to_sheet(scorecard_df, TAB_COACH_SCORECARD)
+    base.write_to_sheet(cancellations_df, TAB_CLASS_CANCELLATIONS)
     if len(summary_df):
         base.write_to_sheet(summary_df, TAB_CLASS_COMPARE_SUMMARY)
     if len(detail_df):
