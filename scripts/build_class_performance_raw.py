@@ -55,6 +55,8 @@ from collections import Counter, defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 import pandas as pd
 import requests
@@ -63,12 +65,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import build_class_performance_dashboard_data as base  # noqa: E402
 from config import (  # noqa: E402
-    LOCATIONS,
+    LOCATIONS, INSTRUCTOR_NAME_OVERRIDES,
     TAB_CLASS_SESSIONS_RAW, TAB_CLASS_HISTORY_RAW, TAB_COACH_SCORECARD_RAW,
     TAB_CLASS_CANCELLATIONS_RAW, TAB_CLASS_COMPARE_SUMMARY, TAB_CLASS_COMPARE_DETAIL,
 )
 
 PAGE_SIZE = int(os.environ.get("CP_RAW_PAGE_SIZE", "500"))
+WORKERS = int(os.environ.get("CP_RAW_WORKERS", "4"))   # studios pulled in parallel
 
 # Reservation status -> what it means for the paid-visit logic.
 STATUS_CHECKED_IN = "check in"
@@ -179,17 +182,18 @@ def load_holds():
 # --------------------------------------------------------------------------
 # Per-location pulls
 # --------------------------------------------------------------------------
-def pull_sessions(loc_id, start, end):
+def pull_sessions(loc_id, start, end, label=""):
     """All class sessions (held AND cancelled) for one location. Date
     filters work on this endpoint (min_date / max_date); validated."""
     seen = {}
     for w_start, w_end in month_windows(start, end):
         for rec in pull_pages("class_sessions", {"location": loc_id, "min_date": w_start, "max_date": w_end}):
             seen[rec["id"]] = rec
+    print(f"  [{label}] class_sessions: {len(seen)} pulled ({start} -> {end})", flush=True)
     return list(seen.values())
 
 
-def aggregate_reservations(loc_id, start, end):
+def aggregate_reservations(loc_id, start, end, label=""):
     """Stream reservations and keep only per-class status counters (never
     the rows themselves). Pulled by class date + location, then counted
     client-side -- the reservations 'status' filter is not reliable."""
@@ -210,32 +214,51 @@ def aggregate_reservations(loc_id, start, end):
             counts[cs][status] += 1
             if status == "pending":
                 counts[cs][f"pending:{at.get('reservation_type')}"] += 1
-    print(f"    {n} reservations aggregated.")
+        print(f"  [{label}] reservations through {w_end}: {n} so far", flush=True)
+    print(f"  [{label}] {n} reservations aggregated.", flush=True)
     return counts
 
 
 # --------------------------------------------------------------------------
 # Build the report-shaped session table
 # --------------------------------------------------------------------------
+def first_name(full_name):
+    """Report 294 shows coaches by FIRST NAME only ('Leto'), while the raw
+    endpoint returns full names ('Leto Katarnias'). Exceptions go in
+    INSTRUCTOR_NAME_OVERRIDES in config.py."""
+    full_name = str(full_name).strip()
+    if not full_name:
+        return ""
+    return INSTRUCTOR_NAME_OVERRIDES.get(full_name) or full_name.split()[0]
+
+
 def instructors_text(value):
     if value is None:
         return ""
-    if isinstance(value, (list, tuple)):
-        return ", ".join(str(v).strip() for v in value if str(v).strip())
-    return str(value).strip()
+    parts = list(value) if isinstance(value, (list, tuple)) else str(value).split(",")
+    return ", ".join(first_name(p) for p in parts if str(p).strip())
 
 
 def build_raw_frames(start, end):
     categories = load_class_categories()
     active_admin, active_unavailable = load_holds()
 
+    def fetch_location(loc_name, loc_id):
+        t0 = time.time()
+        recs = pull_sessions(loc_id, start, end, loc_name)
+        counts = aggregate_reservations(loc_id, start, end, loc_name)
+        print(f"[{loc_name}] finished in {time.time() - t0:.0f}s", flush=True)
+        return loc_name, recs, counts
+
+    workers = max(1, min(WORKERS, len(LOCATIONS)))
+    print(f"\nPulling {len(LOCATIONS)} studios with {workers} in parallel ({start} -> {end}) ...", flush=True)
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = [ex.submit(fetch_location, n, i) for n, i in LOCATIONS.items()]
+        fetched = [f.result() for f in futures]          # keeps studio order; re-raises any error
+
     session_rows, cancelled_rows = [], []
-    for loc_name, loc_id in LOCATIONS.items():
-        print(f"\n[{loc_name}] pulling class_sessions {start} -> {end} ...")
-        recs = pull_sessions(loc_id, start, end)
-        print(f"  {len(recs)} sessions ({sum(1 for r in recs if r['attributes'].get('cancellation_datetime'))} cancelled)")
-        print(f"[{loc_name}] pulling reservations ...")
-        counts = aggregate_reservations(loc_id, start, end)
+    for loc_name, recs, counts in fetched:
+        print(f"[{loc_name}] {len(recs)} sessions ({sum(1 for r in recs if r['attributes'].get('cancellation_datetime'))} cancelled)")
 
         for rec in recs:
             at = rec["attributes"]
@@ -345,6 +368,17 @@ def compare_to_report(raw_clean, days):
                               atol=0.11, equal_nan=True)
         diff_flags[col] = ~same
         rows.append({"metric": f"match % -- {col}", "value": f"{100 * same.mean():.1f}%" if len(both) else "n/a"})
+
+    # Show the actual disagreements in the log, not just percentages.
+    for _, r in both.loc[diff_flags["% Utilization"]].head(12).iterrows():
+        rows.append({"metric": f"UTIL MISMATCH {r['_key']}",
+                     "value": (f"report {r['% Utilization_report']} vs raw {r['% Utilization_raw']} | checked in "
+                               f"{r['Checked In Reservations_raw']}, capacity {r['Actual Capacity_raw']}, "
+                               f"class type {r['Class Type_raw']}")})
+    name_pairs = both.loc[diff_flags["Instructors"], ["Instructors_report", "Instructors_raw"]].value_counts().head(12)
+    for (rep_name, raw_name), n in name_pairs.items():
+        rows.append({"metric": f"INSTRUCTOR NAME DIFFERS: report '{rep_name}' vs raw '{raw_name}'", "value": int(n)})
+
     # How the majority-of-the-room rule behaves in this window:
     has_holds = raw["Admin Holds"] > 0
     counted = raw["Admin Holds Counted"] > 0
@@ -355,11 +389,16 @@ def compare_to_report(raw_clean, days):
     rows.append({"metric": "waived no shows in window", "value": int(raw["Waived No Shows"].sum())})
 
     detail_cols = ["_key"] + [f"{c}_{s}" for c in COMPARE_COLUMNS for s in ("report", "raw")]
-    detail = both.loc[diff_flags.any(axis=1), detail_cols].rename(columns={"_key": "class (location|date|time|room)"})
+    detail = both.loc[diff_flags.any(axis=1), detail_cols].copy()
+    detail.insert(1, "differs_in", diff_flags.loc[detail.index].apply(
+        lambda r: ", ".join(c for c in COMPARE_COLUMNS if r[c]), axis=1))
+    # Classes that differ in something OTHER than just instructor names come first.
+    detail = detail.assign(_only_names=(detail["differs_in"] == "Instructors")).sort_values("_only_names").drop(columns="_only_names")
+    detail = detail.rename(columns={"_key": "class (location|date|time|room)"})
     unmatched = m[m["_merge"] != "both"][["_key", "_merge"]].rename(
         columns={"_key": "class (location|date|time|room)", "_merge": "present_in"})
     unmatched["present_in"] = unmatched["present_in"].map({"left_only": "report only", "right_only": "raw only"})
-    detail = pd.concat([detail, unmatched], ignore_index=True).head(1000)
+    detail = pd.concat([unmatched, detail], ignore_index=True).head(3000)
     return pd.DataFrame(rows), detail
 
 
@@ -368,7 +407,8 @@ def compare_to_report(raw_clean, days):
 # --------------------------------------------------------------------------
 def main():
     end_date = date.today().isoformat()
-    start_date = os.environ.get("CP_RAW_HISTORY_START", base.HISTORY_START)
+    custom_start = os.environ.get("CP_RAW_HISTORY_START", "").strip()
+    start_date = custom_start or base.HISTORY_START
     compare_days = int(os.environ.get("CP_COMPARE_DAYS", "56"))
 
     raw_sessions, cancelled = build_raw_frames(start_date, end_date)
@@ -386,6 +426,10 @@ def main():
         summary_df, detail_df = compare_to_report(sessions_df, compare_days)
         print("\n--- Comparison summary ---")
         print(summary_df.to_string(index=False))
+
+    if custom_start and os.environ.get("DEBUG_ONLY_SKIP_SHEET_WRITE") != "true":
+        sys.exit(f"Refusing to write: this run used a shortened history start ({custom_start}) and would overwrite "
+                 f"the Sheet tabs with partial history. Re-run with debug_only=true, or leave history_start blank.")
 
     if os.environ.get("DEBUG_ONLY_SKIP_SHEET_WRITE") == "true":
         print("\nDEBUG_ONLY_SKIP_SHEET_WRITE is set -- skipping the actual write.")
