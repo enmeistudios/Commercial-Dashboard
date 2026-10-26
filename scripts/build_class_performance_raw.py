@@ -70,6 +70,16 @@ from config import (  # noqa: E402
     TAB_CLASS_CANCELLATIONS_RAW, TAB_CLASS_COMPARE_SUMMARY, TAB_CLASS_COMPARE_DETAIL,
 )
 
+# Every reservation status we know about. Anything else seen in the data is
+# reported loudly, because an unrecognised status would silently count as
+# zero toward paid visits (e.g. if Mariana Tek once used a different name
+# for a late cancel).
+KNOWN_STATUSES = {
+    "check in", "standard cancel", "graced cancel", "penalty cancel",
+    "penalty no show", "graced no show", "no fee no show",
+    "removed", "class cancelled", "pending",
+}
+
 PAGE_SIZE = int(os.environ.get("CP_RAW_PAGE_SIZE", "500"))
 WORKERS = int(os.environ.get("CP_RAW_WORKERS", "4"))   # studios pulled in parallel
 
@@ -345,6 +355,18 @@ def build_raw_frames(start, end):
             })
 
     print(f"Instructor names came from: {dict(name_source)}")
+
+    status_totals = Counter()
+    for _, _, counts in fetched:
+        for per_class in counts.values():
+            status_totals.update({k: v for k, v in per_class.items() if not str(k).startswith("pending:")})
+    print("\nReservation statuses seen (count):")
+    for st, n in status_totals.most_common():
+        print(f"  {str(st):<20} {n:>8}{'' if st in KNOWN_STATUSES else '   <-- UNKNOWN STATUS'}")
+    unknown = {k: v for k, v in status_totals.items() if k not in KNOWN_STATUSES}
+    if unknown:
+        print(f"\n!!! WARNING: {len(unknown)} reservation status(es) not recognised: {unknown}. "
+              f"They are NOT counted as paid visits. Tell Claude so they can be classified.")
     raw_sessions = pd.DataFrame(session_rows)
     cancelled = pd.DataFrame(cancelled_rows)
     if len(cancelled):
@@ -369,7 +391,7 @@ def compare_to_report(raw_clean, days):
     """Class-by-class comparison over the last `days` days. Returns
     (summary_df, detail_df)."""
     end = date.today() - timedelta(days=1)          # today's classes are still in progress
-    start = end - timedelta(days=days - 1)
+    start = max(end - timedelta(days=days - 1), date.fromisoformat(base.HISTORY_START))
     print(f"\nComparing against report 294 for {start} -> {end} ...")
     try:
         rep = base.clean_sessions_df(base.get_table_report_294(start.isoformat(), end.isoformat()))
