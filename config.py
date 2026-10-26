@@ -75,3 +75,10 @@ TAB_COACH_SCORECARD_RAW = "ClassPerformanceRaw_CoachScorecard"
 TAB_CLASS_CANCELLATIONS_RAW = "ClassPerformanceRaw_Cancellations"
 TAB_CLASS_COMPARE_SUMMARY = "ClassPerformanceRaw_CompareSummary"
 TAB_CLASS_COMPARE_DETAIL = "ClassPerformanceRaw_CompareDetail"
+
+# Raw-data Class Performance builds instructor names as FIRST NAMES to match
+# report 294 (e.g. raw "Leto Katarnias" -> report "Leto"). Only add an entry
+# here when a coach's name in the report is NOT simply their first name,
+# e.g. {"Elizabeth Smith": "Liz"}. The comparison summary lists any names
+# that still differ, so you'll know exactly what to add.
+INSTRUCTOR_NAME_OVERRIDES = {}
