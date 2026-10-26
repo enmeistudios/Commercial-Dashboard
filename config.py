@@ -76,9 +76,11 @@ TAB_CLASS_CANCELLATIONS_RAW = "ClassPerformanceRaw_Cancellations"
 TAB_CLASS_COMPARE_SUMMARY = "ClassPerformanceRaw_CompareSummary"
 TAB_CLASS_COMPARE_DETAIL = "ClassPerformanceRaw_CompareDetail"
 
-# Raw-data Class Performance builds instructor names as FIRST NAMES to match
-# report 294 (e.g. raw "Leto Katarnias" -> report "Leto"). Only add an entry
-# here when a coach's name in the report is NOT simply their first name,
-# e.g. {"Elizabeth Smith": "Liz"}. The comparison summary lists any names
-# that still differ, so you'll know exactly what to add.
+# Raw-data Class Performance takes coach names from each coach's
+# "schedule display name" in Mariana Tek (the same field report 294 uses --
+# 'Sam', 'Tammy', 'Olivia A.'), so nothing needs to be listed here normally.
+# This list is only a FALLBACK for a class that has no schedule-profile link:
+# there the script falls back to the coach's first name, and an entry here
+# can correct it. Key by full name or first name, e.g. {"Samantha": "Sam"}.
+# The comparison summary lists any names that still differ.
 INSTRUCTOR_NAME_OVERRIDES = {}
