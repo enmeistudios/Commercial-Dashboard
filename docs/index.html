@@ -1087,6 +1087,9 @@ tbody tr:hover td{background:var(--bg3)}
   <div class="legend">
     <div class="legend-grid">
       <dl>
+        <dt>Where this data comes from</dt>
+        <dd>Class Performance is built directly from Mariana Tek's underlying class, reservation and spot-hold data, refreshed daily at 10:00 UTC &mdash; not from a pre-built report. It was checked class by class against Mariana Tek's previous report over the full history (every class since January 2025) and matched on every measure on this page. Visits are counted as: <strong>checked in</strong> + <strong>late cancellations</strong> that carried a fee + <strong>no-shows</strong> that carried a fee (plus private-class admin holds, see below). Late cancellations and no-shows where the fee was waived are not counted as paid visits.</dd>
+
         <dt>Data sources</dt>
         <dd>Class-level utilization comes from Mariana Tek's "Class Session Utilization Details" report (report 294) — one row per class that actually took place. Cancelled classes come from a <strong>separate</strong> pull of the class_sessions endpoint, filtered to a non-null cancellation timestamp. These two sources are deliberately NOT joined or reconciled — confirmed during build that cancelled classes never appear in report 294 at all, so "classes held" and "classes cancelled" are two independent counts, not complementary halves of one number.</dd>
 
