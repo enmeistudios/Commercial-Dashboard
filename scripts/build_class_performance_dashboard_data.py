@@ -76,19 +76,20 @@ Shoreditch. "Layout Capacity" (the room's max) is also kept for
 reference on the Definitions page, since the two can differ (e.g. a
 reduced equipment setup on a given day).
 
-Admin Holds count as a paid visit -- validated against a real example
-(Marylebone, 2026-06-02 18:30: 2 checked-in + 12 admin holds = a
-genuine private class, confirmed with Remy). This is real but RARE --
-an initial pull of nonzero Admin Holds rows was mostly a red herring:
-~150 rows all turned out to be a recurring pattern on "Recovery —
-Compression Boots" (already excluded by class type, unrelated to
-private classes), leaving only 3 genuine non-excluded classes with
-Admin Holds > 0 in a ~2-month window. Unavailable Holds (broken
-equipment etc.) are deliberately NOT included -- that's lost capacity,
-not a paid visit. FUTURE ENHANCEMENT, not built yet: eventually assign
-an average RPV (revenue per visit) specifically to Admin Hold spots,
-since private-class economics likely differ from a standard drop-in/
-membership visit.
+Admin Holds count as a paid visit ONLY WHEN THEY COVER THE MAJORITY OF
+THE ROOM (more than half of Actual Capacity) -- i.e. a genuine private
+class, validated against a real example (Marylebone, 2026-06-02 18:30:
+2 checked-in + 12 admin holds in a 16-capacity room, confirmed with
+Remy). Smaller counts (typically 1) are waitlist-alert holds Mariana Tek
+places when a late cancel opens a spot in a full class; they are not
+paid visits and can double-count the late cancel itself, so they are
+ignored. The raw "Admin Holds" column is kept as-is (it matches report
+294 exactly); "Admin Holds Counted" is what feeds Paid Visits.
+Unavailable Holds (broken equipment etc.) are deliberately NOT included
+-- that's lost capacity, not a paid visit. FUTURE ENHANCEMENT, not built
+yet: eventually assign an average RPV (revenue per visit) specifically
+to Admin Hold spots, since private-class economics likely differ from a
+standard drop-in/membership visit.
 
 Multi-instructor: no comma-separated names were found in any sample
 pulled during validation, but the raw class_sessions API field
@@ -151,6 +152,14 @@ REPORT_294_ID = 294
 # Excluded by name -- see module docstring for why these can't be
 # identified any other reliable way.
 EXCLUDED_CLASS_TYPES = {"recovery — compression boots", "full body"}
+
+# Admin holds count as paid visits ONLY when they cover MORE THAN this share
+# of the room's capacity (i.e. a private class where staff hold most of the
+# room). Smaller counts are mostly the waitlist-alert holds Mariana Tek
+# places when a late cancel opens a spot in a full class -- those are not
+# paid visits, and when the cancel was a late cancel they double-count it.
+# Strictly greater than: exactly half the room is NOT a majority.
+ADMIN_HOLD_MAJORITY_SHARE = 0.5
 
 # How far back to pull full history on first run / backfill. Subsequent
 # runs still pull this whole window each time (no accumulated state --
@@ -246,24 +255,22 @@ def clean_sessions_df(raw_df):
     if df["% Utilization"].dropna().max() is not None and df["% Utilization"].dropna().max() <= 1:
         df["% Utilization"] = df["% Utilization"] * 100
 
-    # Admin Holds count as a paid visit -- confirmed with Remy against a
-    # real example (Marylebone, 2026-06-02 18:30: 2 checked-in + 12 admin
-    # holds in a 16-cap room = a genuine private class, staff manually
-    # holding spots rather than a dedicated private-booking product).
-    # IMPORTANT: this is a real but RARE signal -- in a ~2-month window
-    # only 3 non-excluded classes had Admin Holds > 0 (all Marylebone),
-    # after filtering out ~150 rows that turned out to be recurring
-    # Recovery Boots holds (unrelated, already excluded by class type).
-    # Won't move headline numbers much, but is accurate on the classes
-    # where it applies. Unavailable Holds (broken equipment etc.)
-    # deliberately NOT included -- that's lost capacity, not a paid visit.
+    # Admin Holds count as a paid visit only when they cover the MAJORITY
+    # of the room (a private class) -- see ADMIN_HOLD_MAJORITY_SHARE above.
+    # Validated example: Marylebone 2026-06-02 18:30, 12 holds in a
+    # 16-capacity room. A lone hold is almost always a waitlist-alert hold
+    # from a late cancel (not a paid visit; it can also double-count the
+    # late cancel), so it is not counted. Unavailable Holds (broken
+    # equipment etc.) deliberately NOT included -- lost capacity, not a
+    # paid visit.
     # FUTURE ENHANCEMENT (not built yet, flagged per Remy): eventually
     # assign an average RPV (revenue per visit) specifically to Admin
-    # Hold spots, since private-class economics likely differ from a
-    # standard drop-in/membership visit.
+    # Hold spots, since private-class economics likely differ.
+    admin_share = np.where(df["Actual Capacity"] > 0, df["Admin Holds"] / df["Actual Capacity"], 0.0)
+    df["Admin Holds Counted"] = np.where(admin_share > ADMIN_HOLD_MAJORITY_SHARE, df["Admin Holds"], 0)
     df["Paid Visits"] = (
         df["Checked In Reservations"] + df["Late Cancelled Reservations"]
-        + df["No Showed Reservations"] + df["Admin Holds"]
+        + df["No Showed Reservations"] + df["Admin Holds Counted"]
     )
     df["Total % Paid Visits"] = np.where(
         df["Actual Capacity"] > 0,
