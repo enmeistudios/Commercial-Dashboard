@@ -66,13 +66,8 @@ TAB_CLASS_HISTORY = "ClassPerformance_History"
 TAB_COACH_SCORECARD = "ClassPerformance_CoachScorecard"
 TAB_CLASS_CANCELLATIONS = "ClassPerformance_Cancellations"
 
-# --- Class Performance, RAW-DATA version (built alongside the report-294
-# version so the two can be compared before switching over; see
-# scripts/build_class_performance_raw.py). Same schemas as the tabs above.
-TAB_CLASS_SESSIONS_RAW = "ClassPerformanceRaw_Sessions"
-TAB_CLASS_HISTORY_RAW = "ClassPerformanceRaw_History"
-TAB_COACH_SCORECARD_RAW = "ClassPerformanceRaw_CoachScorecard"
-TAB_CLASS_CANCELLATIONS_RAW = "ClassPerformanceRaw_Cancellations"
+# --- Class Performance comparison tabs (only written when an optional
+# comparison against report 294 is run; see scripts/build_class_performance_raw.py).
 TAB_CLASS_COMPARE_SUMMARY = "ClassPerformanceRaw_CompareSummary"
 TAB_CLASS_COMPARE_DETAIL = "ClassPerformanceRaw_CompareDetail"
 
