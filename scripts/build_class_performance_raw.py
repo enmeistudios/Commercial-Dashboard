@@ -135,6 +135,16 @@ def rel_id(record, name):
     return None
 
 
+def rel_ids(record, name):
+    """IDs of a to-many relationship (empty list if absent)."""
+    data = ((record.get("relationships") or {}).get(name) or {}).get("data")
+    if isinstance(data, list):
+        return [d.get("id") for d in data if isinstance(d, dict) and d.get("id") is not None]
+    if isinstance(data, dict) and data.get("id") is not None:
+        return [data["id"]]
+    return []
+
+
 def month_windows(start, end):
     """Inclusive (start, end) ISO date windows, one per calendar month."""
     cur, last = pd.Timestamp(start), pd.Timestamp(end)
@@ -161,6 +171,24 @@ def load_class_categories():
     except Exception as e:  # noqa: BLE001
         print(f"WARNING: couldn't load class categories ({e}); 'Class Category' left blank.")
         return {}
+
+
+def load_instructor_display_names():
+    """employee_public_profile id -> schedule_display_name.
+    Report 294 shows coaches by the display name set on their schedule
+    profile ('Sam', 'Tammy', 'Olivia A.', 'Recovery Boots'), NOT by their
+    legal first name -- so nicknames and two coaches sharing a first name
+    come out right when we use the same field."""
+    out = {}
+    try:
+        for p in pull_pages("employee_public_profiles", {}):
+            name = (p["attributes"].get("schedule_display_name") or "").strip()
+            if name:
+                out[p["id"]] = name
+        print(f"Loaded {len(out)} coach display names.")
+    except Exception as e:  # noqa: BLE001
+        print(f"WARNING: couldn't load coach display names ({e}); falling back to the first-name rule.")
+    return out
 
 
 def load_holds():
@@ -223,13 +251,14 @@ def aggregate_reservations(loc_id, start, end, label=""):
 # Build the report-shaped session table
 # --------------------------------------------------------------------------
 def first_name(full_name):
-    """Report 294 shows coaches by FIRST NAME only ('Leto'), while the raw
-    endpoint returns full names ('Leto Katarnias'). Exceptions go in
-    INSTRUCTOR_NAME_OVERRIDES in config.py."""
+    """FALLBACK only (used when a class has no schedule-profile link):
+    first name, with exceptions from INSTRUCTOR_NAME_OVERRIDES in config.py
+    (keyed by full name or by first name)."""
     full_name = str(full_name).strip()
     if not full_name:
         return ""
-    return INSTRUCTOR_NAME_OVERRIDES.get(full_name) or full_name.split()[0]
+    first = full_name.split()[0]
+    return INSTRUCTOR_NAME_OVERRIDES.get(full_name) or INSTRUCTOR_NAME_OVERRIDES.get(first) or first
 
 
 def instructors_text(value):
@@ -241,6 +270,8 @@ def instructors_text(value):
 
 def build_raw_frames(start, end):
     categories = load_class_categories()
+    display_names = load_instructor_display_names()
+    name_source = Counter()
     active_admin, active_unavailable = load_holds()
 
     def fetch_location(loc_name, loc_id):
@@ -276,13 +307,21 @@ def build_raw_frames(start, end):
             capacity = at.get("capacity") or 0
             checked_in = c[STATUS_CHECKED_IN]
             sub = (rec.get("relationships") or {}).get("substituted_instructors", {}).get("data")
+            profile_ids = rel_ids(rec, "employee_public_profiles")
+            shown = [display_names[i] for i in profile_ids if i in display_names]
+            if profile_ids and len(shown) == len(profile_ids):
+                instructors = ", ".join(shown)
+                name_source["schedule display name"] += 1
+            else:
+                instructors = instructors_text(at.get("instructor_names"))
+                name_source["first-name fallback"] += 1
             start_date = at.get("start_date")
             session_rows.append({
                 "Location": loc_name,
                 "Class Date": start_date,
                 "Class Time": at.get("start_time"),
                 "Class Day of Week": pd.Timestamp(start_date).day_name() if start_date else "",
-                "Instructors": instructors_text(at.get("instructor_names")),
+                "Instructors": instructors,
                 "Has Substitute?": bool(sub),
                 "Classroom": at.get("classroom_display"),
                 "Class Tags": "",
@@ -305,6 +344,7 @@ def build_raw_frames(start, end):
                 "Waived No Shows": c[STATUS_NO_SHOW_WAIVED],
             })
 
+    print(f"Instructor names came from: {dict(name_source)}")
     raw_sessions = pd.DataFrame(session_rows)
     cancelled = pd.DataFrame(cancelled_rows)
     if len(cancelled):
@@ -358,6 +398,11 @@ def compare_to_report(raw_clean, days):
         {"metric": "only in report", "value": int((m["_merge"] == "left_only").sum())},
         {"metric": "only in raw", "value": int((m["_merge"] == "right_only").sum())},
     ]
+    # Excluded class types (Recovery boots, Full Body) never feed a metric, and
+    # report 294 leaves their utilization blank, so they are left out of the
+    # utilization and instructor comparisons.
+    excl = both["Class Type_raw"].astype(str).str.strip().str.lower().isin(base.EXCLUDED_CLASS_TYPES)
+    rows.append({"metric": "excluded class types in window (not compared on utilization / instructors)", "value": int(excl.sum())})
     diff_flags = pd.DataFrame(index=both.index)
     for col in COMPARE_COLUMNS:
         a, b = both[f"{col}_report"], both[f"{col}_raw"]
@@ -366,6 +411,9 @@ def compare_to_report(raw_clean, days):
         else:
             same = np.isclose(pd.to_numeric(a, errors="coerce"), pd.to_numeric(b, errors="coerce"),
                               atol=0.11, equal_nan=True)
+        same = pd.Series(same, index=both.index)
+        if col in ("% Utilization", "Instructors"):
+            same = same | excl
         diff_flags[col] = ~same
         rows.append({"metric": f"match % -- {col}", "value": f"{100 * same.mean():.1f}%" if len(both) else "n/a"})
 
