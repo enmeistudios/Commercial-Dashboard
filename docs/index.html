@@ -963,6 +963,22 @@ tbody tr:hover td{background:var(--bg3)}
   </div>
 
   <div class="cc" style="margin-bottom:16px">
+    <div class="cch"><div><div class="cct">Booking source: direct vs third-party</div><div class="ccs">Paid visits (checked in, plus late cancellations and no-shows that carried a fee) split by how the booking was made. Third-party = ClassPass, Wellhub (Gympass) and FitReserve; direct = everything else (memberships, credit packs, comps, private classes). Follows the studio and timeframe selected above.</div></div></div>
+    <div id="cp-src-empty" class="empty-state" style="display:none"></div>
+    <div id="cp-src-body">
+      <div class="mgrid" id="cp-src-metrics" style="margin-bottom:12px"></div>
+      <div class="tscroll" style="margin-bottom:14px">
+        <table id="cp-src-table">
+          <thead><tr><th>Studio</th><th>Paid visits</th><th>Direct</th><th>Third-party</th><th>% third-party</th><th>ClassPass</th><th>Wellhub</th><th>Other</th></tr></thead>
+          <tbody id="cp-src-table-body"></tbody>
+        </table>
+      </div>
+      <div class="ccs" style="margin:0 0 6px">Weekly, selected studio &middot; the most recent week is likely partial (still in progress)</div>
+      <div class="h260"><canvas id="chartBookingSource"></canvas></div>
+    </div>
+  </div>
+
+  <div class="cc" style="margin-bottom:16px">
     <div class="cch">
       <div><div class="cct">Utilization heatmap</div><div class="ccs" id="cp-hm-sub">Day of week × class time, selected studio/timeframe</div></div>
       <div class="coach-select-wrap">
@@ -970,6 +986,7 @@ tbody tr:hover td{background:var(--bg3)}
           <option value="util">% Utilization</option>
           <option value="paid">% Paid Visits</option>
           <option value="count">Class Count</option>
+          <option value="tp">% Third-party bookings</option>
         </select>
       </div>
     </div>
@@ -1087,6 +1104,9 @@ tbody tr:hover td{background:var(--bg3)}
   <div class="legend">
     <div class="legend-grid">
       <dl>
+        <dt>Booking source: direct vs third-party</dt>
+        <dd>Every paid visit (see "Paid visits" above: checked in, plus late cancellations and no-shows that carried a fee) is classified by how it was booked. <strong>Third-party</strong> = booked through ClassPass, Wellhub (formerly Gympass) or FitReserve, identified by Mariana Tek's own reservation tags for those platforms. <strong>Direct</strong> = every other paid visit &mdash; memberships, credit packs, comps and private-class bookings &mdash; so Direct + Third-party always equals Paid visits. In the heatmap, a cell's third-party share is total third-party visits divided by total paid visits in that slot (not an average of per-class percentages), and its colour shows the share only &mdash; a higher third-party share isn't good or bad in itself. Bookings only appear here once the Class Performance data has refreshed with this feature.</dd>
+
         <dt>Where this data comes from</dt>
         <dd>Class Performance is built directly from Mariana Tek's underlying class, reservation and spot-hold data, refreshed daily at 10:00 UTC &mdash; not from a pre-built report. It was checked class by class against Mariana Tek's previous report over the full history (every class since January 2025) and matched on every measure on this page. Visits are counted as: <strong>checked in</strong> + <strong>late cancellations</strong> that carried a fee + <strong>no-shows</strong> that carried a fee (plus private-class admin holds, see below). Late cancellations and no-shows where the fee was waived are not counted as paid visits.</dd>
 
@@ -2098,6 +2118,13 @@ function normalizeSession(r) {
     utilPct: r['% Utilization'] != null && r['% Utilization'] !== '' ? Number(r['% Utilization']) : null,
     paidVisits: Number(r['Paid Visits']) || 0,
     paidPct: r['Total % Paid Visits'] != null && r['Total % Paid Visits'] !== '' ? Number(r['Total % Paid Visits']) : null,
+    // Booking source (paid visits split by how they were booked). Direct +
+    // Third-Party always equals Paid Visits. Missing columns read as 0.
+    direct: Number(r['Direct Bookings']) || 0,
+    thirdParty: Number(r['Third-Party Bookings']) || 0,
+    classpass: Number(r['ClassPass Bookings']) || 0,
+    wellhub: Number(r['Wellhub Bookings']) || 0,
+    otherTP: Number(r['Other Third-Party Bookings']) || 0,
   };
 }
 function ensureCPNormalized() {
@@ -2174,11 +2201,24 @@ function heatColor(pct) {
   const c = lo.c.map((v, i) => Math.round(v + (hi.c[i] - v) * t));
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
-function renderHeatLegend(elId) {
+// Neutral sequential scale for "share of bookings" views. Deliberately NOT
+// the red-to-green scale: a high third-party share isn't "good" or "bad".
+function heatColorNeutral(pct) {
+  if (pct == null || !isFinite(pct)) return null;
+  const p = Math.max(0, Math.min(100, pct)) / 100;
+  const stops = [{ p: 0, c: [40, 52, 84] }, { p: 0.5, c: [110, 92, 168] }, { p: 1, c: [226, 122, 176] }];
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) { if (p >= stops[i].p && p <= stops[i + 1].p) { lo = stops[i]; hi = stops[i + 1]; break; } }
+  const t = (hi.p === lo.p) ? 0 : (p - lo.p) / (hi.p - lo.p);
+  const c = lo.c.map((v, i) => Math.round(v + (hi.c[i] - v) * t));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+function renderHeatLegend(elId, scheme) {
   const el = document.getElementById(elId);
   if (!el) return;
   const steps = 10;
-  el.innerHTML = Array.from({ length: steps }, (_, i) => `<span style="background:${heatColor(i / (steps - 1) * 100)}"></span>`).join('');
+  const colorFn = scheme === 'tp' ? heatColorNeutral : heatColor;
+  el.innerHTML = Array.from({ length: steps }, (_, i) => `<span style="background:${colorFn(i / (steps - 1) * 100)}"></span>`).join('');
 }
 
 // Builds one heatmap grid -- TIME as rows, DAY OF WEEK as columns (the
@@ -2200,6 +2240,9 @@ function buildHeatmap(containerId, rows, metric) {
     const c = cells.get(key);
     const v = metric === 'util' ? r.utilPct : metric === 'paid' ? r.paidPct : 1;
     if (v != null) { c.sum += v; c.n += 1; }
+    // Third-party share is a SUM over bookings (third-party / paid visits),
+    // not an average of per-class percentages.
+    c.paid = (c.paid || 0) + r.paidVisits; c.tp = (c.tp || 0) + r.thirdParty;
   });
   const hoursUsed = HOUR_ORDER.filter(h => DAY_ORDER.some(d => cells.has(d + '|' + h)));
   const hours = hoursUsed.length ? hoursUsed : HOUR_ORDER;
@@ -2216,6 +2259,13 @@ function buildHeatmap(containerId, rows, metric) {
     hours.forEach(hour => {
       const c = cells.get(day + '|' + hour);
       if (!c || c.n === 0) { html += `<div class="hm-cell empty"></div>`; return; }
+      if (metric === 'tp') {
+        if (!c.paid) { html += `<div class="hm-cell empty"></div>`; return; }
+        const share = 100 * c.tp / c.paid;
+        const tipTp = `${day} ${hour} — ${share.toFixed(1)}% third-party (${c.tp} of ${c.paid} paid visits, ${c.n} classes)`;
+        html += `<div class="hm-cell" style="background:${heatColorNeutral(share)}" data-tip="${tipTp}">${share.toFixed(0)}%</div>`;
+        return;
+      }
       const avg = c.sum / c.n;
       const bg = metric === 'count' ? heatColor((c.n / maxCount) * 100) : heatColor(avg);
       const label = metric === 'count' ? c.n : avg.toFixed(0) + '%';
@@ -2351,7 +2401,11 @@ function renderClassPerformance() {
   } else {
     buildHeatmap('cp-heatmap-single', rows, metric);
   }
-  renderHeatLegend('cp-hm-legend-scale');
+  renderHeatLegend('cp-hm-legend-scale', metric === 'tp' ? 'tp' : 'good');
+  document.getElementById('cp-hm-sub').textContent = metric === 'tp'
+    ? 'Day of week × class time — share of paid visits booked through ClassPass, Wellhub or FitReserve (colour shows the share; it is not good or bad)'
+    : 'Day of week × class time, selected studio/timeframe';
+  renderBookingSource(rows);
 
   const { start: flagStart, end: flagEnd } = getDateBounds('cp');
   const slotFlags = computeSlotFlags(rows, avgUtil, flagStart, flagEnd, PAGES.cp.studio === 'all');
@@ -2394,6 +2448,79 @@ function renderClassPerformance() {
       const sPaid = mean(sRows.map(r => r.paidPct));
       return `<tr><td>${studio}</td><td>${sRows.length.toLocaleString()}</td><td>${sCancelled.toLocaleString()}</td><td>${sUtil == null ? '—' : sUtil.toFixed(1) + '%'}</td><td>${sPaid == null ? '—' : sPaid.toFixed(1) + '%'}</td></tr>`;
     }).join('');
+}
+
+// ── Booking source: direct vs third-party ─────────────────────────────
+function sumSrc(rows) {
+  const t = { paid: 0, direct: 0, tp: 0, cp: 0, wh: 0, other: 0 };
+  rows.forEach(r => { t.paid += r.paidVisits; t.direct += r.direct; t.tp += r.thirdParty; t.cp += r.classpass; t.wh += r.wellhub; t.other += r.otherTP; });
+  return t;
+}
+const pctOf = (a, b) => b > 0 ? 100 * a / b : null;
+const fShare = v => v == null ? '—' : v.toFixed(1) + '%';
+function weekStartLocal(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));            // back to Monday
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function renderBookingSource(rows) {
+  const body = document.getElementById('cp-src-body'), empty = document.getElementById('cp-src-empty');
+  if (!body) return;
+  const hasCols = CP_SESSION_ROWS.length > 0 && ('Third-Party Bookings' in CP_SESSION_ROWS[0]);
+  if (!hasCols) {
+    empty.style.display = ''; body.style.display = 'none';
+    empty.textContent = "Booking-source data isn't in the Sheet yet — it will appear after the next Class Performance refresh.";
+    return;
+  }
+  empty.style.display = 'none'; body.style.display = '';
+
+  const t = sumSrc(rows);
+  const dShare = pctOf(t.direct, t.paid), tShare = pctOf(t.tp, t.paid);
+
+  let cmp = null, compLabel = '';
+  if (COMPARE_MODES.cp !== 'none') {
+    const cr = getCPComparisonRows('cp');
+    if (cr.length) { cmp = sumSrc(cr); compLabel = { previous_period: 'vs previous period', previous_month: 'vs previous month', last_year: 'vs same period last year' }[COMPARE_MODES.cp]; }
+  }
+  const pct = (a, b) => (b != null && b !== 0) ? ((a - b) / Math.abs(b)) * 100 : null;
+  const countDelta = (a, b) => { const d = pct(a, b); return d == null ? '' : `<div class="ms ${d >= 0 ? 'pos-text' : 'neg-text'}">${fPct(d)} ${compLabel}</div>`; };
+  // Share changes are shown in points; they are neutral (a rising third-party share is not good or bad), so no red/green.
+  const shareDelta = (a, b) => (a == null || b == null) ? '' : `<div class="ms">${a - b >= 0 ? '+' : ''}${(a - b).toFixed(1)}pp ${compLabel}</div>`;
+
+  document.getElementById('cp-src-metrics').innerHTML = `
+    <div class="mc"><div class="ml">Paid visits (bookings)</div><div class="mv">${t.paid.toLocaleString()}</div>${cmp ? countDelta(t.paid, cmp.paid) : ''}<div class="ms">Checked in + fee-charged late cancels &amp; no-shows</div></div>
+    <div class="mc"><div class="ml">Direct</div><div class="mv">${t.direct.toLocaleString()}</div><div class="ms">${fShare(dShare)} of paid visits</div>${cmp ? shareDelta(dShare, pctOf(cmp.direct, cmp.paid)) : ''}</div>
+    <div class="mc"><div class="ml">Third-party</div><div class="mv">${t.tp.toLocaleString()}</div><div class="ms">${fShare(tShare)} of paid visits</div>${cmp ? shareDelta(tShare, pctOf(cmp.tp, cmp.paid)) : ''}</div>
+    <div class="mc"><div class="ml">Third-party by platform</div><div class="mv" style="font-size:15px;line-height:1.55">ClassPass ${t.cp.toLocaleString()}<br>Wellhub ${t.wh.toLocaleString()}<br>Other ${t.other.toLocaleString()}</div><div class="ms">${t.tp ? `${fShare(pctOf(t.cp, t.tp))} / ${fShare(pctOf(t.wh, t.tp))} / ${fShare(pctOf(t.other, t.tp))} of third-party` : 'No third-party bookings in this selection'}</div></div>
+  `;
+
+  // Every studio, regardless of the studio toggle (same convention as the studio comparison table), plus a total row.
+  const line = (label, rs, bold) => {
+    const x = sumSrc(rs);
+    const b = bold ? ' style="font-weight:600"' : '';
+    return `<tr${b}><td>${label}</td><td>${x.paid.toLocaleString()}</td><td>${x.direct.toLocaleString()}</td><td>${x.tp.toLocaleString()}</td><td>${fShare(pctOf(x.tp, x.paid))}</td><td>${x.cp.toLocaleString()}</td><td>${x.wh.toLocaleString()}</td><td>${x.other.toLocaleString()}</td></tr>`;
+  };
+  document.getElementById('cp-src-table-body').innerHTML = CP_ALL_STUDIOS.length === 0
+    ? `<tr><td colspan="8" class="empty-state">No data yet.</td></tr>`
+    : CP_ALL_STUDIOS.map(st => line(st, getCPRows('cp', st))).join('') + line('All studios', getCPRows('cp', 'all'), true);
+
+  // Weekly trend for the selected studio: stacked counts + % third-party.
+  const byWeek = new Map();
+  rows.forEach(r => {
+    if (!r.date) return;
+    const wk = weekStartLocal(r.date);
+    if (!byWeek.has(wk)) byWeek.set(wk, { direct: 0, tp: 0, paid: 0 });
+    const e = byWeek.get(wk); e.direct += r.direct; e.tp += r.thirdParty; e.paid += r.paidVisits;
+  });
+  const weeks = Array.from(byWeek.keys()).sort();
+  mk('chartBookingSource', { type: 'bar', data: { labels: weeks, datasets: [
+    { type: 'bar', label: 'Direct', data: weeks.map(w => byWeek.get(w).direct), backgroundColor: C.slate, stack: 's', borderRadius: 3 },
+    { type: 'bar', label: 'Third-party', data: weeks.map(w => byWeek.get(w).tp), backgroundColor: C.teal, stack: 's', borderRadius: 3 },
+    { type: 'line', label: '% third-party', data: weeks.map(w => { const e = byWeek.get(w); return e.paid ? 100 * e.tp / e.paid : null; }), borderColor: C.enmei, backgroundColor: C.enmei, tension: 0.3, yAxisID: 'y1', pointRadius: 2 },
+  ] }, options: { responsive: true, maintainAspectRatio: false, scales: {
+    x: { ...xsc(), stacked: true }, y: { ...ysc(), stacked: true, position: 'left' },
+    y1: { position: 'right', min: 0, max: 100, ticks: { color: C.text2, font: { size: 11 }, callback: v => v + '%' }, grid: { display: false } },
+  }, plugins: { legend: { labels: { color: C.text2, font: { size: 11 } } } } } });
 }
 
 // ════════════════════════════════════════════════════════════════
