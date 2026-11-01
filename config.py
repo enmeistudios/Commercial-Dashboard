@@ -79,3 +79,8 @@ TAB_CLASS_COMPARE_DETAIL = "ClassPerformanceRaw_CompareDetail"
 # can correct it. Key by full name or first name, e.g. {"Samantha": "Sam"}.
 # The comparison summary lists any names that still differ.
 INSTRUCTOR_NAME_OVERRIDES = {}
+
+# How far back Class Performance pulls. Chelsea (the first studio) opened in
+# October 2024; months before a studio opened just come back empty, so this
+# can safely be earlier than any one studio's start.
+CLASS_PERFORMANCE_HISTORY_START = "2024-10-01"
