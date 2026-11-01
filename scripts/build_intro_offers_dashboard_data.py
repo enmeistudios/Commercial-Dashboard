@@ -727,6 +727,26 @@ def build_flow(outcomes_df):
     return flow
 
 
+def _reset_tab_view(sh, worksheet):
+    """A basic filter or hidden rows left on a tab silently hide rows from
+    Google's data feed (the one the dashboard reads), even though every row
+    is in the Sheet -- this once made the dashboard show only 897 of
+    Chelsea's 7,307 classes. Clearing the filter and unhiding all rows
+    before every write means a stray filter can never do that again.
+    Each step is tried separately; a failure never blocks the write."""
+    steps = [
+        {"clearBasicFilter": {"sheetId": worksheet.id}},
+        {"updateDimensionProperties": {
+            "range": {"sheetId": worksheet.id, "dimension": "ROWS", "startIndex": 0, "endIndex": worksheet.row_count},
+            "properties": {"hiddenByUser": False}, "fields": "hiddenByUser"}},
+    ]
+    for step in steps:
+        try:
+            sh.batch_update({"requests": [step]})
+        except gspread.exceptions.APIError as e:
+            print(f"  (tab-view reset step skipped for '{worksheet.title}': {str(e)[:80]})")
+
+
 def write_to_sheet(df, tab_name, max_retries=4):
     """Same retry-wrapped overwrite pattern as Membership Health."""
     creds_json = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]
@@ -747,6 +767,7 @@ def write_to_sheet(df, tab_name, max_retries=4):
                 worksheet = sh.worksheet(tab_name)
             except gspread.exceptions.WorksheetNotFound:
                 worksheet = sh.add_worksheet(title=tab_name, rows=max(len(df) + 10, 100), cols=len(df.columns) + 2)
+            _reset_tab_view(sh, worksheet)
             worksheet.clear()
             worksheet.update(values, "A1")
             print(f"Wrote {len(df_out)} rows to '{tab_name}' tab.")

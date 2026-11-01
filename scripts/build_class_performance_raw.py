@@ -67,7 +67,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 import build_class_performance_dashboard_data as base  # noqa: E402
 from config import (  # noqa: E402
-    LOCATIONS, INSTRUCTOR_NAME_OVERRIDES,
+    LOCATIONS, INSTRUCTOR_NAME_OVERRIDES, CLASS_PERFORMANCE_HISTORY_START,
     TAB_CLASS_SESSIONS, TAB_CLASS_HISTORY, TAB_COACH_SCORECARD,
     TAB_CLASS_CANCELLATIONS, TAB_CLASS_COMPARE_SUMMARY, TAB_CLASS_COMPARE_DETAIL,
 )
@@ -397,7 +397,7 @@ def compare_to_report(raw_clean, days):
     """Class-by-class comparison over the last `days` days. Returns
     (summary_df, detail_df)."""
     end = date.today() - timedelta(days=1)          # today's classes are still in progress
-    start = max(end - timedelta(days=days - 1), date.fromisoformat(base.HISTORY_START))
+    start = max(end - timedelta(days=days - 1), date.fromisoformat(CLASS_PERFORMANCE_HISTORY_START))
     print(f"\nComparing against report 294 for {start} -> {end} ...")
     try:
         rep = base.clean_sessions_df(base.get_table_report_294(start.isoformat(), end.isoformat()))
@@ -484,7 +484,7 @@ def compare_to_report(raw_clean, days):
 def main():
     end_date = date.today().isoformat()
     custom_start = os.environ.get("CP_RAW_HISTORY_START", "").strip()
-    start_date = custom_start or base.HISTORY_START
+    start_date = custom_start or CLASS_PERFORMANCE_HISTORY_START
     compare_days = int(os.environ.get("CP_COMPARE_DAYS", "0"))
 
     raw_sessions, cancelled = build_raw_frames(start_date, end_date)
