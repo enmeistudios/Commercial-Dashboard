@@ -184,6 +184,39 @@ tbody tr:hover td{background:var(--bg3)}
 
 .coach-select-wrap{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 
+.wr-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.wr-week{font-size:14px;font-weight:500;color:var(--text)}
+.wr-btn{background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:7px;padding:6px 12px;font-size:11.5px;font-family:var(--sans);cursor:pointer}
+.wr-btn:hover{border-color:var(--text3)}
+.wr-btn.primary{background:var(--enmei);border-color:var(--enmei);color:#fff}
+.wr-controls input[type=date]{background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:7px;padding:5px 8px;font-size:11.5px;font-family:var(--sans)}
+.wr-edit{background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;min-height:56px;font-size:13px;line-height:1.6;outline:none;white-space:pre-wrap}
+.wr-edit:focus{border-color:var(--text3)}
+#page-wr-studio .wr-table td.wr-chg{font-weight:500;white-space:nowrap}
+#page-wr-studio .wr-table td.wr-chg.better{color:var(--teal);background:var(--teal-bg)}
+#page-wr-studio .wr-table td.wr-chg.worse{color:var(--neg);background:var(--neg-bg)}
+#page-wr-studio .wr-table td.wr-chg.flat{color:var(--text2)}
+.wr-pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:10.5px;font-weight:500;margin-right:6px}
+.wr-pill.ok{background:var(--teal-bg);color:var(--teal)}
+.wr-pill.near{background:rgba(224,179,65,0.14);color:#e0b341}
+.wr-pill.bad{background:var(--neg-bg);color:var(--neg)}
+.wr-pill.ref{background:var(--bg4);color:var(--text2)}
+.wr-kpi-sub{font-size:11px;color:var(--text3);margin-top:2px}
+
+.wr-lbl{font-size:11.5px;color:var(--text2);display:flex;align-items:center;gap:6px}
+.wr-block-h{display:flex;align-items:baseline;gap:12px;margin:0 0 8px;flex-wrap:wrap}
+.wr-block-h h2{font-family:var(--serif);font-size:24px;font-weight:400;letter-spacing:.02em}
+.wr-stage{font-size:12px;color:var(--text3)}
+.wr-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:6px;vertical-align:middle;background:var(--text3)}
+.wr-dot.ok{background:var(--teal)}.wr-dot.near{background:#e0b341}.wr-dot.bad{background:var(--neg)}
+#wr-glance table td{vertical-align:top}
+#wr-glance td.wr-studio-cell{cursor:pointer;font-weight:500}
+#wr-glance td.wr-studio-cell:hover{color:var(--enmei)}
+.wr-g-chg{font-size:11px;margin-top:2px;color:var(--text2)}
+.wr-g-chg.better{color:var(--teal)}.wr-g-chg.worse{color:var(--neg)}
+.wr-soon{color:var(--text3);font-size:13px}
+.wr-ref{font-size:11.5px;color:var(--text3);margin-top:6px;line-height:1.55}
+
 </style>
 </head>
 <body>
@@ -226,6 +259,13 @@ tbody tr:hover td{background:var(--bg3)}
       <button class="ni" onclick="goTo('cp-overview',this)">Overview</button>
       <button class="ni" onclick="goTo('cp-coaches',this)">Coach Performance</button>
       <button class="ni" onclick="goTo('cp-definitions',this)">Definitions &amp; Methodology</button>
+    </div>
+  </div>
+
+  <div class="ngroup" id="group-reports">
+    <button class="ngroup-head" onclick="toggleGroup('reports')"><span class="dot e"></span>Weekly Reports<span class="chev">▶</span></button>
+    <div class="ngroup-body">
+      <button class="ni" onclick="goTo('wr-studio',this)">Studio Report</button>
     </div>
   </div>
 
@@ -911,6 +951,36 @@ tbody tr:hover td{background:var(--bg3)}
 </div>
 
 <!-- ══════════════════════ CLASS PERFORMANCE: OVERVIEW ══════════════════════ -->
+<!-- ══════════════════════ WEEKLY STUDIO REPORT ══════════════════════ -->
+<div class="page" id="page-wr-studio">
+  <div class="ph"><div>
+    <h1>Weekly <em>Studio Report</em></h1>
+    <div class="ph-sub">Enmei · commercial performance by studio · the last 7 days vs the 7 days before · compared with the KPI benchmarks</div>
+  </div></div>
+
+  <div class="ytabs" id="studio-tabs-wr" style="margin-bottom:12px"></div>
+
+  <div class="wr-controls">
+    <button class="wr-btn" onclick="wrShift(-1)">◀ Earlier</button>
+    <span class="wr-week" id="wr-week-label">—</span>
+    <button class="wr-btn" onclick="wrShift(1)">Later ▶</button>
+    <label class="wr-lbl">Window ends <input type="date" id="wr-end-input" onchange="wrPickEnd(this.value)"></label>
+    <button class="wr-btn" onclick="wrToYesterday()">Reset to yesterday</button>
+    <span style="flex:1"></span>
+    <button class="wr-btn primary" id="wr-export-main" onclick="wrExport('main')">Export (.doc)</button>
+    <button class="wr-btn" id="wr-export-all" onclick="wrExport('all')">Export all studios (.doc)</button>
+  </div>
+  <div class="ccs" id="wr-freshness" style="margin:-4px 0 14px"></div>
+
+  <div id="wr-glance"></div>
+  <div id="wr-blocks" oninput="wrBlockInput(event)"></div>
+
+  <div class="cc">
+    <div class="cch"><div><div class="cct">How these numbers are defined</div></div></div>
+    <div class="ccs" style="line-height:1.65;color:var(--text2)" id="wr-notes"></div>
+  </div>
+</div>
+
 <div class="page" id="page-cp-overview">
   <div class="ph"><div>
     <h1>Class Performance <em>Overview</em></h1>
@@ -1173,6 +1243,7 @@ function goTo(pageName, btn) {
   if (pageName === 'io-summerstrong') renderSummerStrong();
   if (pageName === 'cp-overview') renderClassPerformance();
   if (pageName === 'cp-coaches') renderCoachPerformance();
+  if (pageName === 'wr-studio') renderWeeklyReport();
 }
 function toggleGroup(groupName) {
   document.getElementById('group-' + groupName).classList.toggle('open');
@@ -1285,6 +1356,7 @@ function toISO(d) { return d.toISOString().slice(0, 10); }
 // pages: ov (Overview), rev (Revenue), ch (Churn & Retention), comp (Composition)
 // ════════════════════════════════════════════════════════════════
 let HISTORY_ROWS = [], LIVE_ROWS = [], AGE_PYRAMID_ROWS = [], CUSTOMER_LOG_ROWS = [], ALL_STUDIOS = [];
+let MEM_DAILY_ROWS = [];   // Membership_Daily: one row per studio per day (Weekly Studio Report)
 let IO_LIVE_ROWS = [], IO_HISTORY_ROWS = [], IO_FLOW_ROWS = [], IO_ATTENDANCE_ROWS = [], IO_STARTER_ROWS = [], IO_EXPIRING_ROWS = [], IO_ALL_STUDIOS = [];
 let SS_PERFORMANCE_ROWS = [], SS_EXPIRING_ROWS = [], SS_EXPIRING_DETAIL_ROWS = [];
 let CP_SESSION_ROWS = [], CP_HISTORY_ROWS = [], CP_COACH_ROWS = [], CP_CANCEL_ROWS = [], CP_ALL_STUDIOS = [];
@@ -1368,9 +1440,9 @@ function renderPage(page) {
 // data (e.g. a studio that's about to open). Names must match Mariana Tek's
 // location names exactly -- same names as LOCATIONS in config.py. Any studio
 // that shows up in the data but isn't listed here is still added after
-// these, so nothing is ever hidden. To add London Bridge: add it here (and
-// in config.py's LOCATIONS).
-const CONFIGURED_STUDIOS = ['Chelsea', 'Marylebone', 'Shoreditch', 'Canary Wharf'];
+// these, so nothing is ever hidden. To add another studio: add it here and in
+// config.py's LOCATIONS (the Weekly Studio Report uses this same list).
+const CONFIGURED_STUDIOS = ['Chelsea', 'Marylebone', 'Shoreditch', 'Canary Wharf', 'London Bridge'];
 function mergeStudios(fromData) {
   const extras = Array.from(new Set(fromData)).filter(s => s && !CONFIGURED_STUDIOS.includes(s)).sort();
   return [...CONFIGURED_STUDIOS, ...extras];
@@ -2018,6 +2090,407 @@ function renderTenureMix() {
     : `Reconstructed for ${toISO(asOfDate)}, broken out by month. Memberships are 6-month commitments with an option to renew -- watch for clustering right around Month 6, Month 12, etc., which reflects the renewal decision point, not necessarily dissatisfaction`;
   mk('chartAgePyramid', { type: 'bar', data: { labels: tenureLabels, datasets: [{ data: tenureData, backgroundColor: C.teal, borderRadius: 4, borderSkipped: false }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: xsc(), y: ysc() } } });
+}
+
+// ════════════════════════════════════════════════════════════════
+// WEEKLY STUDIO REPORT
+// ════════════════════════════════════════════════════════════════
+// Every studio, side by side and one by one: the last 7 days (ending
+// yesterday by default) vs the 7 days before, with the KPI benchmarks, a
+// generated draft summary and a Word (.doc) export. Every number reuses
+// the definitions already used on the other pages (see the notes on the page).
+
+// All studios the report lists, in order. A studio with no data yet (e.g.
+// London Bridge before it opens) shows as "opening soon" and starts
+// reporting automatically once it has classes in the data.
+const WR_STUDIOS = CONFIGURED_STUDIOS;
+
+// Exact opening dates ('YYYY-MM-DD'), optional. If a studio isn't listed its
+// age comes from its first class in the data. Only used to choose between
+// the new-studio (under 6 months) and established-studio KPIs.
+const WR_STUDIO_OPEN_DATES = {};
+
+// KPI benchmarks and reference points, from the commercial KPI notes.
+// Edit here to change them.
+const WR_KPI = {
+  newStudioMonths: 6,
+  newStudio: {
+    membersPerWeek: m => m <= 3 ? { target: 5, text: '5 per week (first 3 months; 2 per week after)' } : { target: 2, text: '2 per week (months 3–6; 5 per week earlier)' },
+    paidPct: m => m <= 3 ? 58 : 68,
+    classesPerDay: m => m <= 3 ? 7 : 8,
+    intro: { target: 4, text: '4–5 per week' },
+    reference: 'Reference points from the KPI notes: Chelsea and Marylebone added about 65 and 120 members respectively over their first 6 months. At 3 months their avg paid visit % was 57.4% with 6.5 classes per day; at 6 months, 68.1% with 7.8 classes per day.',
+  },
+  established: {
+    membersPerWeek: 4,
+    paidPct: 92, paidPctByStudio: { Marylebone: 87 },
+    classesPerDayRef: { Chelsea: 12.3, Marylebone: 11.1 },
+    intro: 8,
+    reference: 'Reference points from the KPI notes: new memberships over 3 months — Chelsea 42 (3.5 per week), Marylebone 49 (4 per week). Avg paid visit % — Chelsea 92%, Marylebone 85.1% (87% is the realistic target). Avg classes per day — Chelsea 12.3, Marylebone 11.1 (not a KPI). New intro offers per week — Chelsea 6.25, Marylebone 7.5.',
+  },
+};
+
+const WR = { view: 'all', end: null, edits: {} };
+const WR_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const wrToDate = iso => { const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); };
+const wrIso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const wrAdd = (iso, n) => { const d = wrToDate(iso); d.setDate(d.getDate() + n); return wrIso(d); };
+const wrOrd = n => n + ((n % 100 >= 11 && n % 100 <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th'));
+function wrRange(startIso, endIso) {
+  const a = wrToDate(startIso), b = wrToDate(endIso);
+  return a.getMonth() === b.getMonth()
+    ? `${wrOrd(a.getDate())}–${wrOrd(b.getDate())} ${WR_MON[b.getMonth()]}`
+    : `${wrOrd(a.getDate())} ${WR_MON[a.getMonth()]} – ${wrOrd(b.getDate())} ${WR_MON[b.getMonth()]}`;
+}
+const wrYesterday = () => wrAdd(wrIso(new Date()), -1);
+const wrEsc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const wrWindows = end => ({ cur: { start: wrAdd(end, -6), end }, prv: { start: wrAdd(end, -13), end: wrAdd(end, -7) } });
+
+function wrStudios() { return [...WR_STUDIOS, ...(CP_ALL_STUDIOS || []).filter(s => s && !WR_STUDIOS.includes(s))]; }
+
+function wrStudioAge(studio, refIso) {
+  ensureCPNormalized();
+  let open = WR_STUDIO_OPEN_DATES[studio];
+  if (!open) {
+    let min = null;
+    CP_NORM_ROWS.forEach(r => { if (r.studio === studio && r.date && (min === null || r.date < min)) min = r.date; });
+    open = min;
+  }
+  if (!open) return { months: null, open: null };
+  return { months: (wrToDate(refIso) - wrToDate(open)) / (1000 * 60 * 60 * 24 * 30.4375), open: String(open).slice(0, 10) };
+}
+
+// Classes, utilisation, paid visit %, attendance: the same per-class averages as the Class Performance scorecards.
+function wrClassStats(studio, startIso, endIso) {
+  ensureCPNormalized();
+  const rows = CP_NORM_ROWS.filter(r => r.studio === studio && !r.isExcluded && r.date >= startIso && r.date <= endIso);
+  const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  return {
+    classes: rows.length,
+    util: mean(rows.filter(r => r.utilPct != null).map(r => r.utilPct)),
+    paid: mean(rows.filter(r => r.paidPct != null).map(r => r.paidPct)),
+    attendance: rows.reduce((s, r) => s + r.checkedIn, 0),
+    perDay: rows.length / 7,
+  };
+}
+// Daily membership snapshots (Membership_Daily): "active" = ongoing (not cancelled, incl. frozen and
+// payment-failure) at the END of the window's last day; "new" = memberships started in the window,
+// excluding upgrades, downgrades and studio switches -- the same rules as the weekly Membership pages.
+function wrMembership(studio, startIso, endIso) {
+  const rows = MEM_DAILY_ROWS.filter(r => r.studio === studio && String(r.date).slice(0, 10) >= startIso && String(r.date).slice(0, 10) <= endIso);
+  const endRow = rows.find(r => String(r.date).slice(0, 10) === endIso);
+  if (!endRow) return null;
+  return { active: Number(endRow.active_count) || 0, added: rows.reduce((s, r) => s + (Number(r.new_count) || 0), 0) };
+}
+// Intro offers by the day they STARTED (purchase date), as on the Intro Offers pages. Studio-specific offers only:
+// products that aren't tied to one studio are recorded under "All Studios" and so never appear in a single studio's count.
+function wrIntro(studio, startIso, endIso) {
+  const rows = IO_STARTER_ROWS.filter(r => r.studio === studio && String(r.intro_date).slice(0, 10) >= startIso && String(r.intro_date).slice(0, 10) <= endIso);
+  const conv = rows.filter(r => r.outcome === 'Converted to Membership').length;
+  return { sold: rows.length, converted: conv, rate: rows.length ? 100 * conv / rows.length : null };
+}
+
+function wrKpiStatus(value, target) {
+  if (value == null || target == null) return null;
+  const ratio = value / target;
+  return ratio >= 1 ? 'ok' : ratio >= 0.9 ? 'near' : 'bad';
+}
+const wrFmt = (unit, v) => v == null ? '—' : unit === 'pct' ? v.toFixed(1) + '%' : unit === 'dec' ? v.toFixed(1) : Math.round(v).toLocaleString();
+function wrChange(unit, cur, prv, good) {
+  if (cur == null || prv == null) return { text: '—', cls: 'flat', delta: null };
+  const d = cur - prv;
+  const tiny = unit === 'count' ? d === 0 : Math.abs(d) < 0.05;
+  if (tiny) return { text: '–', cls: 'flat', delta: 0 };
+  const sign = d > 0 ? '+' : '-', mag = Math.abs(d);
+  const text = unit === 'pct' ? `${sign}${mag.toFixed(1)}pp` : unit === 'dec' ? `${sign}${mag.toFixed(1)}` : `${sign}${Math.round(mag).toLocaleString()}`;
+  return { text: (d > 0 ? '▲ ' : '▼ ') + text, cls: !good ? 'flat' : (d > 0 ? 'better' : 'worse'), delta: d };
+}
+function wrVsKpi(unit, value, target) {
+  if (value == null || target == null) return '';
+  const d = value - target, sign = d >= 0 ? '+' : '-', mag = Math.abs(d);
+  if (mag < 0.05) return '±0';
+  return unit === 'pct' ? `${sign}${mag.toFixed(1)}pp` : `${sign}${unit === 'dec' ? mag.toFixed(1) : mag.toFixed(1).replace(/\.0$/, '')}`;
+}
+
+function wrCompute(studio, end) {
+  const { cur, prv } = wrWindows(end);
+  const c = wrClassStats(studio, cur.start, cur.end), p = wrClassStats(studio, prv.start, prv.end);
+  const mc = wrMembership(studio, cur.start, cur.end), mp = wrMembership(studio, prv.start, prv.end);
+  const ic = wrIntro(studio, cur.start, cur.end), ip = wrIntro(studio, prv.start, prv.end);
+  const age = wrStudioAge(studio, cur.end);
+  const noData = age.months == null;
+  const isNew = !noData && age.months < WR_KPI.newStudioMonths;
+
+  let kMembers, kPaid, kPerDay, kIntro, stageText, kpiLine, reference = '';
+  if (noData) {
+    stageText = 'Opening soon — no data yet';
+    kpiLine = 'This studio will report automatically once it has classes in the data.';
+  } else if (isNew) {
+    const m = age.months, k = WR_KPI.newStudio;
+    kMembers = k.membersPerWeek(m);
+    kPaid = { target: k.paidPct(m), text: `${k.paidPct(m)}%` };
+    kPerDay = { target: k.classesPerDay(m), text: String(k.classesPerDay(m)) };
+    kIntro = k.intro;
+    stageText = `New studio · ${m.toFixed(1)} months open`;
+    kpiLine = `New-studio KPIs (under ${WR_KPI.newStudioMonths} months): new memberships ${kMembers.text}; avg paid visit % ${kPaid.target}% (58% by month 3, 68% by month 6); avg classes per day ${kPerDay.target} (7 by month 3, 8 by month 6); intro offers ${kIntro.text}.`;
+    reference = k.reference;
+  } else {
+    const k = WR_KPI.established;
+    const pTarget = k.paidPctByStudio[studio] != null ? k.paidPctByStudio[studio] : k.paidPct;
+    kMembers = { target: k.membersPerWeek, text: `${k.membersPerWeek} per week` };
+    kPaid = { target: pTarget, text: `${pTarget}%` };
+    kPerDay = { target: k.classesPerDayRef[studio] != null ? k.classesPerDayRef[studio] : null, ref: true };
+    kIntro = { target: k.intro, text: `${k.intro} per week` };
+    stageText = `Established studio · ${age.months.toFixed(0)} months open`;
+    kpiLine = `Established-studio KPIs: new memberships ${kMembers.text}; avg paid visit % ${pTarget}%${k.paidPctByStudio[studio] != null ? ` (realistic target for ${studio})` : ''}; new intro offers ${kIntro.text}; avg classes per day${kPerDay.target != null ? ` — recent level ${kPerDay.target}` : ''} (not a KPI).`;
+    reference = k.reference;
+  }
+
+  const metric = (key, label, unit, cur_, prv_, good, kpi) => {
+    const ch = wrChange(unit, cur_, prv_, good);
+    return { key, label, unit, curr: cur_, prev: prv_, good, change: ch, kpi: kpi || null, currText: wrFmt(unit, cur_), prevText: wrFmt(unit, prv_) };
+  };
+  const kpiOf = (unit, value, k) => (!k || k.target == null) ? null : {
+    targetText: k.text || (unit === 'pct' ? k.target + '%' : String(k.target)), target: k.target, unit,
+    status: k.ref ? 'ref' : wrKpiStatus(value, k.target), diff: k.ref ? '' : wrVsKpi(unit, value, k.target), ref: !!k.ref,
+  };
+  const metrics = [
+    metric('util', 'Average class utilisation', 'pct', c.util, p.util, true, null),
+    metric('paid', 'Avg paid visit %', 'pct', c.paid, p.paid, true, kpiOf('pct', c.paid, kPaid)),
+    metric('classes', 'Total classes delivered', 'count', c.classes, p.classes, false, null),
+    metric('perday', 'Average classes per day', 'dec', c.perDay, p.perDay, false, kpiOf('dec', c.perDay, kPerDay)),
+    metric('attendance', 'Total class attendance', 'count', c.attendance, p.attendance, true, null),
+    metric('active', 'Active memberships', 'count', mc ? mc.active : null, mp ? mp.active : null, true, null),
+    metric('newmem', 'New memberships sold', 'count', mc ? mc.added : null, mp ? mp.added : null, true, kpiOf('count', mc ? mc.added : null, kMembers)),
+    metric('intro', 'Intro offers sold', 'count', ic.sold, ip.sold, true, kpiOf('count', ic.sold, kIntro)),
+    metric('conv', 'Intro offer conversion rate', 'pct', ic.rate, ip.rate, true, null),
+  ];
+  const d = { studio, end, cur, prv, age, isNew, noData, stageText, kpiLine, reference, metrics, hasMembership: !!(mc && mp) };
+  d.summary = noData ? '' : wrSummary(d);
+  return d;
+}
+
+// Plain-language draft from the numbers only (no adjectives beyond up/down/ahead/below), to be edited.
+function wrSummary(d) {
+  const m = k => d.metrics.find(x => x.key === k);
+  const dir = (delta, up = 'up', down = 'down') => delta > 0 ? up : down;
+  const num = (mm, delta) => mm.unit === 'pct' ? `${Math.abs(delta).toFixed(1)} points` : mm.unit === 'dec' ? Math.abs(delta).toFixed(1) : Math.abs(Math.round(delta)).toLocaleString();
+  const vsPrev = mm => { const c = mm.change; return (c.delta == null) ? '' : c.delta === 0 ? 'unchanged on the previous 7 days' : `${dir(c.delta)} ${num(mm, c.delta)} on the previous 7 days`; };
+  const paren = mm => { const v = vsPrev(mm); return v ? ` (${v})` : ''; };
+  const kpiClause = mm => {
+    if (!mm.kpi || mm.kpi.ref || mm.curr == null) return '';
+    return mm.curr >= mm.kpi.target ? `, ahead of the ${mm.kpi.targetText} KPI` : `, below the ${mm.kpi.targetText} KPI`;
+  };
+  const util = m('util'), cls = m('classes'), att = m('attendance'), paid = m('paid'), perday = m('perday'), act = m('active'), neu = m('newmem'), intro = m('intro'), conv = m('conv');
+  const out = [];
+
+  const noClasses = cls.curr === 0 && (cls.prev === 0 || cls.prev == null);
+  if (noClasses) {
+    out.push(`No classes were recorded for ${d.studio} in the last 7 days.`);
+  } else if (cls.curr != null) {
+    let s = `Enmei ${d.studio} delivered ${cls.currText} classes${paren(cls)}`;
+    if (att.change.delta != null) s += att.change.delta === 0 ? `, with total attendance unchanged at ${att.currText}` : `, with total attendance ${dir(att.change.delta)} ${num(att, att.change.delta)} to ${att.currText}`;
+    if (util.change.delta != null && util.curr != null) s += ` and average utilisation ${util.change.delta === 0 ? 'unchanged at' : `${dir(util.change.delta)} ${num(util, util.change.delta)} to`} ${util.currText}`;
+    out.push(s + '.');
+  }
+  if (paid.curr != null && !noClasses) {
+    const ch = paid.change.delta == null ? '' : paid.change.delta === 0 ? ' (unchanged on the previous 7 days)' : ` (${dir(paid.change.delta)} ${num(paid, paid.change.delta)} on the previous 7 days)`;
+    let s = `Average paid visit % was ${paid.currText}${ch}${kpiClause(paid)}`;
+    if (d.isNew && perday.kpi && !perday.kpi.ref && perday.curr != null) s += `, and classes per day were ${perday.currText}${kpiClause(perday)}`;
+    out.push(s + '.');
+  }
+  if (neu.curr != null || act.curr != null) {
+    let s = '';
+    if (neu.curr != null) s += `${neu.currText} new membership${neu.curr === 1 ? ' was' : 's were'} sold${paren(neu)}${kpiClause(neu)}`;
+    if (act.curr != null && act.change.delta != null) s += `${s ? ', and ' : ''}active memberships ${act.change.delta === 0 ? 'were unchanged at' : `${act.change.delta > 0 ? 'rose by' : 'fell by'} ${num(act, act.change.delta)} to`} ${act.currText}`;
+    if (s) out.push(s + '.');
+  }
+  if (intro.curr != null) {
+    let s = `${intro.currText} intro offer${intro.curr === 1 ? ' was' : 's were'} sold${paren(intro)}${kpiClause(intro)}`;
+    if (conv.curr != null && conv.prev != null) s += `, with conversion to membership ${conv.change.delta === 0 ? 'unchanged at' : `${conv.change.delta > 0 ? 'improving' : 'slipping'} from ${conv.prevText} to`} ${conv.currText}`;
+    out.push(s + '.' + (conv.curr != null ? ' Conversion for the most recent days will rise as more of those intro offers have time to convert.' : ''));
+  }
+  return out.join(' ');
+}
+
+const wrKpiLabel = mm => mm.kpi.ref ? 'Reference' : ({ ok: 'On / ahead of KPI', near: 'Slightly below', bad: 'Below KPI' }[mm.kpi.status] || '');
+function wrKpiCellHtml(mm) {
+  if (!mm.kpi) return '<span style="color:var(--text3)">—</span>';
+  const k = mm.kpi, label = wrKpiLabel(mm);
+  const pill = (label && mm.curr != null) ? `<span class="wr-pill ${k.ref ? 'ref' : (k.status || 'ref')}">${label}</span>` : '';
+  const diff = (mm.curr != null && k.diff) ? ` ${k.diff}` : '';
+  return `${pill}<span>${wrEsc(k.targetText)}${diff}</span>${k.ref ? '<div class="wr-kpi-sub">not a KPI &mdash; for context</div>' : ''}`;
+}
+
+const wrKey = studio => studio + '|' + WR.end;
+function wrBlockInput(ev) {
+  const el = ev.target.closest && ev.target.closest('[data-kind]');
+  if (!el) return;
+  const studio = el.closest('.wr-block').dataset.studio, k = wrKey(studio);
+  WR.edits[k] = WR.edits[k] || {};
+  WR.edits[k][el.dataset.kind] = el.innerText;
+}
+function wrResetSummary(link) {
+  const studio = link.closest('.wr-block').dataset.studio, k = wrKey(studio);
+  if (WR.edits[k]) delete WR.edits[k].summary;
+  renderWeeklyReport();
+}
+function wrSetView(view) { WR.view = view; renderWeeklyReport(); }
+function wrShift(n) {
+  const next = wrAdd(WR.end, 7 * n);
+  WR.end = next > wrYesterday() ? wrYesterday() : next;
+  renderWeeklyReport();
+}
+function wrPickEnd(v) { if (!v) return; WR.end = v > wrYesterday() ? wrYesterday() : v; renderWeeklyReport(); }
+function wrToYesterday() { WR.end = wrYesterday(); renderWeeklyReport(); }
+function wrInit() { if (!WR.end) WR.end = wrYesterday(); }
+
+function wrNotesHtml(anyMissing) {
+  return `<p><strong>Windows.</strong> By default &ldquo;the last 7 days&rdquo; is the 7 days ending yesterday, compared with the 7 days before that. Use Earlier / Later (steps of 7 days) or the date box to report on a different window.</p>
+  <p><strong>Utilisation</strong> and <strong>avg paid visit %</strong> are the same per-class averages used on Class Performance (checked-in as % of capacity; paid visits = checked in + late cancels and no-shows that carried a fee, plus private-class holds). Recovery Boots and Full Body are excluded. <strong>Total class attendance</strong> = checked-in visits. <strong>Average classes per day</strong> = classes &divide; 7.</p>
+  <p><strong>Active memberships</strong> = ongoing memberships (not cancelled, including frozen and payment-failure) at the end of the window&rsquo;s last day; <strong>new memberships sold</strong> = memberships started in the window, excluding upgrades, downgrades and studio switches &mdash; both on the same rules as the Membership Health pages, calculated daily.</p>
+  <p><strong>Intro offers sold</strong> = intro offers purchased in the window at this studio. Offers that aren&rsquo;t tied to one studio are recorded under &ldquo;All Studios&rdquo; and are not in a single studio&rsquo;s count. <strong>Conversion rate</strong> = those purchasers who went on to buy a membership &divide; those purchasers. Recent days&rsquo; rates are still maturing, since people can convert for weeks after starting.</p>
+  <p><strong>KPIs</strong> come from the commercial KPI notes. A studio counts as new for its first ${WR_KPI.newStudioMonths} months, judged from its first class in the data. Green = on or ahead of the KPI, amber = within 10% below, red = more than 10% below. For established studios, average classes per day is shown for context only.</p>
+  <p><strong>Data freshness.</strong> Memberships refresh daily at 08:00 UTC, intro offers at 09:00 UTC and classes at 10:00 UTC. For complete numbers for yesterday, run the report after 10:00 UTC.</p>` +
+  (anyMissing ? '<p style="color:#e0b341"><strong>Note:</strong> membership figures are missing for some studios in this window &mdash; either the daily membership data hasn&rsquo;t been refreshed yet, or the Membership_Daily tab isn&rsquo;t in the Sheet yet (it appears after the next Membership refresh).</p>' : '');
+}
+
+function wrGlanceHtml(all) {
+  const cols = [['classes', 'Classes'], ['util', 'Utilisation'], ['paid', 'Avg paid visit %'], ['attendance', 'Attendance'], ['active', 'Active members'], ['newmem', 'New members'], ['intro', 'Intro offers'], ['conv', 'Intro conversion']];
+  const rows = all.map(d => {
+    if (d.noData) return `<tr><td class="wr-studio-cell" onclick="wrSetView('${d.studio.replace(/'/g, "\\'")}')">${wrEsc(d.studio)}</td><td colspan="${cols.length + 1}" class="wr-soon">Opening soon — no data yet</td></tr>`;
+    const tds = cols.map(([k]) => {
+      const mm = d.metrics.find(x => x.key === k);
+      const dot = (mm.kpi && !mm.kpi.ref && mm.kpi.status && mm.curr != null) ? `<span class="wr-dot ${mm.kpi.status}" title="${wrKpiLabel(mm)}"></span>` : '';
+      return `<td><div>${mm.currText}${dot}</div><div class="wr-g-chg ${mm.change.cls}">${mm.change.text}</div></td>`;
+    }).join('');
+    return `<tr><td class="wr-studio-cell" onclick="wrSetView('${d.studio.replace(/'/g, "\\'")}')">${wrEsc(d.studio)}</td><td style="font-size:11px;color:var(--text3)">${wrEsc(d.stageText.replace(' · ', ' · '))}</td>${tds}</tr>`;
+  }).join('');
+  return `<div class="tc" style="margin-bottom:22px"><div class="tch"><span class="tct">At a glance &mdash; all studios</span><span class="ccs" style="margin:0">Last 7 days, with the change vs the previous 7 days &middot; dots show status against the KPI &middot; click a studio for its full report</span></div>
+    <div class="tscroll"><table><thead><tr><th>Studio</th><th>Stage</th>${cols.map(([, l]) => `<th>${l}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+function wrBlockHtml(d) {
+  const e = WR.edits[wrKey(d.studio)] || {};
+  const head = `<div class="wr-block-h"><h2>${wrEsc(d.studio.toUpperCase())}</h2><span class="wr-stage">${wrEsc(d.stageText)}</span></div>`;
+  if (d.noData) return `<div class="wr-block" data-studio="${wrEsc(d.studio)}" style="margin-bottom:26px">${head}<div class="cc"><div class="ccs wr-soon">Opening soon &mdash; no class data yet. ${wrEsc(d.kpiLine)}</div></div></div>`;
+  const curLbl = wrRange(d.cur.start, d.cur.end), prvLbl = wrRange(d.prv.start, d.prv.end);
+  const body = d.metrics.map(mm =>
+    `<tr><td>${wrEsc(mm.label)}</td><td><strong>${mm.currText}</strong></td><td>${mm.prevText}</td><td class="wr-chg ${mm.change.cls}">${mm.change.text}</td><td>${wrKpiCellHtml(mm)}</td></tr>`).join('');
+  return `<div class="wr-block" data-studio="${wrEsc(d.studio)}" style="margin-bottom:26px">${head}
+    <div class="cc" style="margin-bottom:12px"><div class="ccs" style="margin:0">${wrEsc(d.kpiLine)}</div><div class="wr-ref">${wrEsc(d.reference)}</div></div>
+    <div class="cc" style="margin-bottom:12px">
+      <div class="cch"><div><div class="cct">Commercial performance &mdash; draft summary</div><div class="ccs">Written from the numbers below &mdash; edit it freely; it is included in the export. <a href="#" onclick="wrResetSummary(this);return false" style="color:var(--text2)">Reset to the generated text</a></div></div></div>
+      <div class="wr-edit" data-kind="summary" contenteditable="true">${wrEsc(e.summary != null ? e.summary : d.summary)}</div>
+    </div>
+    <div class="tc" style="margin-bottom:12px"><div class="tscroll"><table class="wr-table"><thead><tr><th>Metric</th><th>${curLbl}<div class="wr-kpi-sub">last 7 days</div></th><th>${prvLbl}<div class="wr-kpi-sub">previous 7 days</div></th><th>Change</th><th>KPI</th></tr></thead><tbody>${body}</tbody></table></div></div>
+    <div class="cc"><div class="cch"><div><div class="cct">Your commentary</div><div class="ccs">Optional &mdash; type here and it is included in the export, or add it in Word afterwards.</div></div></div>
+      <div class="wr-edit" data-kind="commentary" contenteditable="true" style="min-height:70px">${wrEsc(e.commentary || '')}</div></div>
+  </div>`;
+}
+
+function renderWeeklyReport() {
+  wrInit();
+  const studios = wrStudios();
+  if (WR.view !== 'all' && !studios.includes(WR.view)) WR.view = 'all';
+  const tab = (v, label) => `<button class="ytab ${WR.view === v ? 'active' : ''}" onclick="wrSetView('${v.replace(/'/g, "\\'")}')">${wrEsc(label)}</button>`;
+  document.getElementById('studio-tabs-wr').innerHTML = tab('all', 'All studios') + studios.map(s => tab(s, s)).join('');
+
+  const { cur, prv } = wrWindows(WR.end);
+  document.getElementById('wr-week-label').textContent = `Last 7 days: ${wrRange(cur.start, cur.end)} ${cur.end.slice(0, 4)}  (vs ${wrRange(prv.start, prv.end)})`;
+  document.getElementById('wr-end-input').value = WR.end;
+  document.getElementById('wr-freshness').textContent = 'Memberships refresh 08:00 UTC, intro offers 09:00 UTC, classes 10:00 UTC — run the report after 10:00 UTC for complete numbers for yesterday.';
+
+  const all = studios.map(s => wrCompute(s, WR.end));
+  const shown = WR.view === 'all' ? all : all.filter(d => d.studio === WR.view);
+  document.getElementById('wr-glance').innerHTML = WR.view === 'all' ? wrGlanceHtml(all) : '';
+  document.getElementById('wr-blocks').innerHTML = shown.map(wrBlockHtml).join('');
+  document.getElementById('wr-notes').innerHTML = wrNotesHtml(all.some(d => !d.noData && !d.hasMembership));
+
+  const main = document.getElementById('wr-export-main'), allBtn = document.getElementById('wr-export-all');
+  if (WR.view === 'all') { main.textContent = `Export all ${studios.length} studios (.doc)`; allBtn.style.display = 'none'; }
+  else { main.textContent = `Export ${WR.view} (.doc)`; allBtn.style.display = ''; allBtn.textContent = `Export all ${studios.length} studios (.doc)`; }
+}
+
+// ── Word (.doc) export: HTML that Word opens natively, with colours kept ──
+const WR_BETTER = 'background:#e3f5f2;color:#0f6b5c', WR_WORSE = 'background:#fdecea;color:#b42318', WR_FLAT = 'color:#555555';
+const WR_PILL = { ok: 'background:#e3f5f2;color:#0f6b5c', near: 'background:#fff4d6;color:#8a5a00', bad: 'background:#fdecea;color:#b42318', ref: 'background:#eeeeee;color:#555555' };
+const wrPara = t => wrEsc(t).replace(/\n/g, '<br>');
+function wrDocGlance(all) {
+  const cols = [['classes', 'Classes'], ['util', 'Utilisation'], ['paid', 'Paid visit %'], ['attendance', 'Attendance'], ['active', 'Active members'], ['newmem', 'New members'], ['intro', 'Intro offers'], ['conv', 'Conversion']];
+  const th = w => `width="${w}" style="background:#2b2b2b;color:#ffffff;padding:4px 4px;text-align:left;font-size:7.5pt;border:1px solid #bbbbbb;width:${w}"`;
+  const td = 'padding:4px 5px;border:1px solid #cccccc;font-size:9pt;vertical-align:top';
+  const rows = all.map(d => {
+    if (d.noData) return `<tr><td style="${td};font-weight:bold">${wrEsc(d.studio)}</td><td colspan="${cols.length}" style="${td};color:#777777">Opening soon &mdash; no data yet</td></tr>`;
+    return `<tr><td width="14%" style="${td};font-weight:bold">${wrEsc(d.studio)}<br><span style="font-weight:normal;font-size:7.5pt;color:#777777">${wrEsc(d.stageText)}</span></td>${cols.map(([k]) => {
+      const mm = d.metrics.find(x => x.key === k);
+      const chg = mm.change.cls === 'better' ? WR_BETTER : mm.change.cls === 'worse' ? WR_WORSE : WR_FLAT;
+      return `<td width="10.7%" style="${td}"><b>${mm.currText}</b><br><span style="${chg};font-size:8pt">${wrEsc(mm.change.text)}</span></td>`;
+    }).join('')}</tr>`;
+  }).join('');
+  const { cur, prv } = all[0] ? { cur: all[0].cur, prv: all[0].prv } : wrWindows(WR.end);
+  return `<h1 style="font-size:20pt;margin:0 0 2pt 0">ENMEI &mdash; WEEKLY STUDIO REPORT</h1>
+<p style="color:#666666;font-size:10pt;margin:0 0 10pt 0">Last 7 days: ${wrRange(cur.start, cur.end)} ${cur.end.slice(0, 4)}, compared with ${wrRange(prv.start, prv.end)}</p>
+<h2 style="font-size:13pt;margin:0 0 4pt 0">At a glance</h2>
+<table width="100%" style="border-collapse:collapse;width:100%" cellspacing="0" cellpadding="0"><tr><th ${th('14%')}>Studio</th>${cols.map(([, l]) => `<th ${th('10.7%')}>${l}</th>`).join('')}</tr>${rows}</table>`;
+}
+function wrDocSection(d, summary, commentary, pageBreak) {
+  const brk = pageBreak ? '<br clear=all style="mso-special-character:line-break;page-break-before:always">' : '';
+  const heading = `<h1 style="font-size:20pt;margin:0 0 2pt 0">${wrEsc(d.studio.toUpperCase())}</h1>`;
+  if (d.noData) return `${brk}${heading}<p style="color:#666666;font-size:10pt">Opening soon &mdash; no class data yet. ${wrEsc(d.kpiLine)}</p>`;
+  const th = w => `width="${w}" style="background:#2b2b2b;color:#ffffff;padding:5px 8px;text-align:left;font-size:10pt;border:1px solid #bbbbbb;width:${w}"`;
+  const td = 'padding:5px 8px;border:1px solid #cccccc;font-size:10pt;vertical-align:top';
+  const rows = d.metrics.map(mm => {
+    const chg = mm.change.cls === 'better' ? WR_BETTER : mm.change.cls === 'worse' ? WR_WORSE : WR_FLAT;
+    let kpi = '—';
+    if (mm.kpi) {
+      const k = mm.kpi, label = wrKpiLabel(mm);
+      kpi = `${(label && mm.curr != null) ? `<span style="${WR_PILL[k.ref ? 'ref' : (k.status || 'ref')]};padding:1px 6px;font-size:9pt">${label}</span> ` : ''}${wrEsc(k.targetText)}${(mm.curr != null && k.diff) ? ' (' + k.diff + ')' : ''}${k.ref ? '<br><span style="font-size:8pt;color:#777777">not a KPI &mdash; for context</span>' : ''}`;
+    }
+    return `<tr><td width="27%" style="${td}">${wrEsc(mm.label)}</td><td width="15%" style="${td};font-weight:bold">${mm.currText}</td><td width="15%" style="${td}">${mm.prevText}</td><td width="16%" style="${td};${chg};font-weight:bold;white-space:nowrap">${wrEsc(mm.change.text)}</td><td width="27%" style="${td}">${kpi}</td></tr>`;
+  }).join('');
+  return `${brk}${heading}
+<p style="color:#666666;font-size:10pt;margin:0 0 10pt 0">${wrEsc(d.stageText)} &middot; Last 7 days: ${wrRange(d.cur.start, d.cur.end)} ${d.cur.end.slice(0, 4)}, compared with ${wrRange(d.prv.start, d.prv.end)}</p>
+<h2 style="font-size:13pt;margin:0 0 4pt 0">Commercial performance:</h2>
+<p style="font-size:11pt;line-height:1.5;margin:0 0 10pt 0">${wrPara(summary)}</p>
+<table width="100%" style="border-collapse:collapse;width:100%" cellspacing="0" cellpadding="0">
+<tr><th ${th('27%')}>Metric</th><th ${th('15%')}>${wrRange(d.cur.start, d.cur.end)}<br><span style="font-weight:normal;font-size:8pt">last 7 days</span></th><th ${th('15%')}>${wrRange(d.prv.start, d.prv.end)}<br><span style="font-weight:normal;font-size:8pt">previous 7 days</span></th><th ${th('16%')}>Change</th><th ${th('27%')}>KPI</th></tr>
+${rows}
+</table>
+<p style="font-size:8.5pt;color:#777777;margin:6pt 0 2pt 0">${wrEsc(d.kpiLine)}</p>
+<p style="font-size:8.5pt;color:#777777;margin:0 0 10pt 0">${wrEsc(d.reference)}</p>
+<h2 style="font-size:13pt;margin:10pt 0 4pt 0">Commentary:</h2>
+<p style="font-size:11pt;line-height:1.5;margin:0">${commentary ? wrPara(commentary) : '<br><br><br>'}</p>`;
+}
+function wrBuildDoc(studios) {
+  const computed = studios.map(s => wrCompute(s, WR.end));
+  const parts = [];
+  if (studios.length > 1) parts.push(wrDocGlance(computed));
+  computed.forEach((d, i) => {
+    const e = WR.edits[wrKey(d.studio)] || {};
+    parts.push(wrDocSection(d, e.summary != null ? e.summary : d.summary, e.commentary || '', i > 0 || studios.length > 1));
+  });
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>Enmei weekly studio report</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<style>body{font-family:Calibri,Arial,sans-serif;color:#222222}</style></head>
+<body>${parts.join('\n')}</body></html>`;
+}
+function wrDownload(filename, html) {
+  const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+function wrExport(kind) {
+  wrInit();
+  const single = kind === 'main' && WR.view !== 'all';
+  const studios = single ? [WR.view] : wrStudios();
+  const { cur } = wrWindows(WR.end);
+  const name = single ? WR.view.replace(/\s+/g, '_') : 'all_studios';
+  wrDownload(`Enmei_weekly_report_${name}_${cur.start}_to_${cur.end}.doc`, wrBuildDoc(studios));
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -2918,6 +3391,10 @@ async function init() {
     SS_EXPIRING_DETAIL_ROWS = ssExpDetailResult.status === 'fulfilled' ? parseGvizTable(ssExpDetailResult.value) : [];
     if (ioLiveResult.status === 'rejected') console.error('IntroOffers_Live load error:', ioLiveResult.reason);
 
+    // Daily membership snapshots -- non-blocking: only the Weekly Studio Report uses it
+    try { MEM_DAILY_ROWS = parseGvizTable(await fetchSheet('Membership_Daily')); }
+    catch (e) { MEM_DAILY_ROWS = []; console.warn('Membership_Daily not available yet:', e.message); }
+
     // Class Performance tabs -- also non-blocking, same reasoning as Intro
     // Offers: a problem here shouldn't take down Membership Health etc.
     const [cpSessionsResult, cpHistoryResult, cpCoachResult, cpCancelResult] = await Promise.allSettled([
@@ -2947,6 +3424,7 @@ async function init() {
     renderSummerStrong();
     renderClassPerformance();
     renderCoachPerformance();
+    wrInit();
   } catch (e) {
     console.error('Sheet load error:', e);
     loading.classList.add('hidden');
