@@ -95,7 +95,7 @@ from config import (
     DASHBOARD_SHEET_ID,
     TAB_INTRO_LIVE, TAB_INTRO_HISTORY, TAB_INTRO_FLOW, TAB_INTRO_ATTENDANCE, TAB_INTRO_STARTERS,
     TAB_INTRO_EXPIRING, TAB_SUMMER_STRONG_PERFORMANCE, TAB_SUMMER_STRONG_EXPIRING,
-    TAB_SUMMER_STRONG_EXPIRING_DETAIL,
+    TAB_SUMMER_STRONG_EXPIRING_DETAIL, LOCATIONS,
 )
 
 BASE_URL = os.environ.get("MARIANA_BASE_URL", "https://enmei.marianatek.com/api")
@@ -115,10 +115,11 @@ EXPIRING_REPORT_IDS = {"1 Week Unlimited": 361, "Welcome 3": 358}
 # names, not customer-facing labels like "Welcome 3" -- so we filter by ID,
 # not by text). See module docstring for the accepted Welcome 3 edge-case gap.
 # One 1 Week Unlimited product per studio (catalog names "1 Week
-# Unlimited/<studio>", from the memberships list). A new studio's product
-# must be added here or its attendance data is silently missing from the
-# attendance charts. Shoreditch (3549) was missing from this list until
-# Canary Wharf was set up; London Bridge will need its own ID added too.
+# Unlimited/<studio>", from the memberships list). These are the known IDs;
+# resolve_one_week_unlimited_ids() ALSO discovers every "1 Week
+# Unlimited/<studio>" product in the live catalog for any studio listed in
+# config.LOCATIONS, so a new studio's product (e.g. London Bridge) is picked
+# up automatically and its attendance data can no longer go silently missing.
 ONE_WEEK_UNLIMITED_MEMBERSHIP_IDS = {
     2921,  # Chelsea
     3215,  # Marylebone
@@ -384,6 +385,42 @@ def build_history(outcomes_df, all_events):
     history["week"] = history["week"].apply(lambda d: d.date().isoformat() if pd.notna(d) else "")
 
     return history[["week", "intro_type", "studio", "starters_count", "converted_membership_count", "converted_pack_count"]]
+
+
+def discover_one_week_unlimited_ids():
+    """Every "1 Week Unlimited/<studio>" product in the live membership
+    catalog whose <studio> is in config.LOCATIONS -> {product_id: studio}.
+    Studio-suffixed and studio-matched on purpose, so unrelated or legacy
+    products with similar names are never swept in. Never raises: on any
+    failure the hard-coded IDs are used on their own."""
+    found = {}
+    try:
+        catalog = get_all_with_relationships("memberships")
+    except Exception as e:  # noqa: BLE001
+        print(f"WARNING: couldn't read the membership catalog ({e}); using the hard-coded 1 Week Unlimited IDs only.")
+        return found
+    studios = {name.lower(): name for name in LOCATIONS}
+    for _, row in catalog.iterrows():
+        m = re.match(r"^\s*1 week unlimited\s*/\s*(.+?)\s*$", str(row.get("name") or ""), flags=re.I)
+        if m and m.group(1).lower() in studios:
+            try:
+                found[int(row["id"])] = studios[m.group(1).lower()]
+            except (TypeError, ValueError):
+                continue
+    return found
+
+
+def resolve_one_week_unlimited_ids():
+    """Hard-coded IDs + anything discovered in the live catalog (sorted list)."""
+    discovered = discover_one_week_unlimited_ids()
+    new = {i: s for i, s in discovered.items() if i not in ONE_WEEK_UNLIMITED_MEMBERSHIP_IDS}
+    gone = sorted(i for i in ONE_WEEK_UNLIMITED_MEMBERSHIP_IDS if discovered and i not in discovered)
+    print(f"1 Week Unlimited products: {len(ONE_WEEK_UNLIMITED_MEMBERSHIP_IDS)} hard-coded, {len(discovered)} found in the catalog.")
+    if new:
+        print(f"  Auto-discovered (not in the hard-coded list, now included): {new}")
+    if gone:
+        print(f"  NOTE: hard-coded IDs not found under a '1 Week Unlimited/<studio>' name in the catalog (renamed?): {gone}")
+    return sorted(set(ONE_WEEK_UNLIMITED_MEMBERSHIP_IDS) | set(discovered))
 
 
 def pull_checkins(filter_params, start_date="2024-10-01", max_retries=4):
@@ -790,7 +827,7 @@ def main():
 
     print("\nPulling 1 Week Unlimited check-ins (real attendance data)...")
     one_week_checkins = pd.concat([
-        pull_checkins({"membership": mid}) for mid in ONE_WEEK_UNLIMITED_MEMBERSHIP_IDS
+        pull_checkins({"membership": mid}) for mid in resolve_one_week_unlimited_ids()
     ], ignore_index=True)
     one_week_attendance, one_week_gaps = build_attendance_summary(one_week_checkins)
     print(f"1 Week Unlimited: {len(one_week_attendance)} customers with real check-ins")
