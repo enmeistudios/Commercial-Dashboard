@@ -971,6 +971,7 @@ tbody tr:hover td{background:var(--bg3)}
     <button class="wr-btn" id="wr-export-all" onclick="wrExport('all')">Export all studios (.doc)</button>
   </div>
   <div class="ccs" id="wr-freshness" style="margin:-4px 0 14px"></div>
+  <div id="wr-memstatus" class="ccs" style="margin:-8px 0 14px;font-size:11.5px"></div>
 
   <div id="wr-glance"></div>
   <div id="wr-blocks" oninput="wrBlockInput(event)"></div>
@@ -2143,6 +2144,8 @@ function wrRange(startIso, endIso) {
     : `${wrOrd(a.getDate())} ${WR_MON[a.getMonth()]} – ${wrOrd(b.getDate())} ${WR_MON[b.getMonth()]}`;
 }
 const wrYesterday = () => wrAdd(wrIso(new Date()), -1);
+// Reads a day from the Sheet whether it came back as 'YYYY-MM-DD' text or as a real Sheets date, which arrives as 'Date(2026,10,1)' (month is 0-based).
+const wrDay = v => { const t = String(v); const m = /^Date\((\d+),\s*(\d+),\s*(\d+)/.exec(t); return m ? `${m[1]}-${String(+m[2] + 1).padStart(2, '0')}-${String(+m[3]).padStart(2, '0')}` : t.slice(0, 10); };
 const wrEsc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const wrWindows = end => ({ cur: { start: wrAdd(end, -6), end }, prv: { start: wrAdd(end, -13), end: wrAdd(end, -7) } });
 
@@ -2177,8 +2180,8 @@ function wrClassStats(studio, startIso, endIso) {
 // payment-failure) at the END of the window's last day; "new" = memberships started in the window,
 // excluding upgrades, downgrades and studio switches -- the same rules as the weekly Membership pages.
 function wrMembership(studio, startIso, endIso) {
-  const rows = MEM_DAILY_ROWS.filter(r => r.studio === studio && String(r.date).slice(0, 10) >= startIso && String(r.date).slice(0, 10) <= endIso);
-  const endRow = rows.find(r => String(r.date).slice(0, 10) === endIso);
+  const rows = MEM_DAILY_ROWS.filter(r => r.studio === studio && wrDay(r.date) >= startIso && wrDay(r.date) <= endIso);
+  const endRow = rows.find(r => wrDay(r.date) === endIso);
   if (!endRow) return null;
   return { active: Number(endRow.active_count) || 0, added: rows.reduce((s, r) => s + (Number(r.new_count) || 0), 0) };
 }
@@ -2389,6 +2392,28 @@ function wrBlockHtml(d) {
   </div>`;
 }
 
+// Says precisely why membership numbers might be missing, instead of a bare dash.
+function wrMemStatus(end, studios) {
+  if (!MEM_DAILY_ROWS.length) return { level: 'bad', text: 'Membership data: the Membership_Daily tab is not in the Sheet yet (or is empty). Run “Daily Membership Dashboard Data Refresh” in GitHub Actions with debug_only = false, then reload this page.' };
+  const ok = d => /^\d{4}-\d{2}-\d{2}/.test(String(d));
+  const dates = MEM_DAILY_ROWS.map(r => wrDay(r.date)).filter(ok).sort();
+  if (!dates.length) return { level: 'bad', text: `Membership data: Membership_Daily has ${MEM_DAILY_ROWS.length.toLocaleString()} rows but its date column is not in YYYY-MM-DD form (first value: “${String(MEM_DAILY_ROWS[0].date)}”). Tell Claude, this needs a small fix.` };
+  const latest = dates[dates.length - 1];
+  const inTab = Array.from(new Set(MEM_DAILY_ROWS.map(r => r.studio)));
+  const withData = studios.filter(st => !wrCompute(st, end).noData);
+  const absent = withData.filter(st => !inTab.includes(st));
+  const parts = []; let level = 'ok';
+  if (latest < end) { level = 'warn'; parts.push(`Membership data currently runs to ${latest}, but this window ends ${end}. It refreshes daily at 08:00 UTC: reload after that, or choose an earlier end date.`); }
+  else parts.push(`Membership data: loaded through ${latest}.`);
+  if (absent.length && absent.length === withData.length) {
+    level = 'warn';
+    parts.push(`No membership rows match any studio here. Studio names in Membership_Daily are: ${inTab.join(', ')}. The names must match exactly.`);
+  } else if (absent.length) {
+    parts.push(`No membership rows yet for ${absent.join(', ')}: expected until they sell a membership, otherwise the studio name doesn't match (names in the tab: ${inTab.join(', ')}).`);
+  }
+  return { level, text: parts.join(' ') };
+}
+
 function renderWeeklyReport() {
   wrInit();
   const studios = wrStudios();
@@ -2402,6 +2427,9 @@ function renderWeeklyReport() {
   document.getElementById('wr-freshness').textContent = 'Memberships refresh 08:00 UTC, intro offers 09:00 UTC, classes 10:00 UTC — run the report after 10:00 UTC for complete numbers for yesterday.';
 
   const all = studios.map(s => wrCompute(s, WR.end));
+  const ms = wrMemStatus(WR.end, studios), msEl = document.getElementById('wr-memstatus');
+  msEl.textContent = ms.text;
+  msEl.style.color = ms.level === 'ok' ? 'var(--text3)' : ms.level === 'warn' ? '#e0b341' : 'var(--neg)';
   const shown = WR.view === 'all' ? all : all.filter(d => d.studio === WR.view);
   document.getElementById('wr-glance').innerHTML = WR.view === 'all' ? wrGlanceHtml(all) : '';
   document.getElementById('wr-blocks').innerHTML = shown.map(wrBlockHtml).join('');
