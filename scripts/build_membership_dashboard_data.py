@@ -72,7 +72,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from config import DASHBOARD_SHEET_ID, TAB_LIVE_STATUS, TAB_HISTORY, TAB_CUSTOMER_LOG, TAB_AGE_PYRAMID
+from config import DASHBOARD_SHEET_ID, TAB_LIVE_STATUS, TAB_HISTORY, TAB_CUSTOMER_LOG, TAB_AGE_PYRAMID, TAB_MEMBERSHIP_DAILY
 
 BASE_URL = os.environ.get("MARIANA_BASE_URL", "https://enmei.marianatek.com/api")
 HEADERS = {"Authorization": f"Bearer {os.environ['MARIANA_API_KEY']}"}
@@ -415,6 +415,59 @@ def build_history(df):
     return pd.concat(results, ignore_index=True)
 
 
+def build_daily(df):
+    """Daily membership snapshots, one row per studio per day -- the same
+    rules as build_history, but at daily instead of weekly resolution, so
+    any rolling window (e.g. "the 7 days ending yesterday") can be reported
+    exactly. Powers the Weekly Studio Report.
+
+    For calendar day D the snapshot instant is T = the start of D+1 (i.e.
+    the end of D), using EXACTLY the same masks as build_history uses at
+    its Monday instants:
+      active_count    = ongoing at T (started, and not cancelled by T;
+                        includes frozen and payment-failure)
+      frozen_count    = of those, under an active freeze at T
+      new_count       = started in (T - 1 day, T], excluding switch/renewal
+                        artifacts (same exclusion as the weekly history)
+      cancelled_count = genuine cancellations in (T - 1 day, T]
+    So the seven daily new_counts for a Monday-Sunday week add up to the
+    weekly history's new_count for the following Monday, and the daily
+    active_count for the Sunday equals that Monday's weekly active_count.
+    Covers every day up to and including yesterday.
+    """
+    valid_start = df["start_date"].notna()
+    first = df.loc[valid_start, "start_date"].min().normalize()
+    last = pd.Timestamp.now(tz="utc").normalize() - pd.Timedelta(days=1)
+    days = pd.date_range(first, last, freq="D")
+    studios = sorted(df["studio"].dropna().unique())
+    real_churn_df = df[~df["is_switch_cancellation"]]
+    one_day = pd.Timedelta(days=1)
+
+    rows = []
+    for day in days:
+        t = day + one_day
+        active_mask = (df["start_date"] <= t) & (
+            df["cancellation_datetime"].isna() | (df["cancellation_datetime"] > t)
+        )
+        frozen_mask = active_mask & df["freeze_datetime"].notna() & (df["freeze_datetime"] <= t) & (
+            df["freeze_reactivation_datetime"].isna() | (df["freeze_reactivation_datetime"] > t)
+        )
+        new_mask = (df["start_date"] > t - one_day) & (df["start_date"] <= t) & (~df["is_switch_new"])
+        cancelled_mask = (real_churn_df["cancellation_datetime"] > t - one_day) & (real_churn_df["cancellation_datetime"] <= t)
+
+        active = df[active_mask].groupby("studio").size()
+        frozen = df[frozen_mask].groupby("studio").size()
+        new = df[new_mask].groupby("studio").size()
+        cancelled = real_churn_df[cancelled_mask].groupby("studio").size()
+        for studio in studios:
+            rows.append({
+                "date": day.date().isoformat(), "studio": studio,
+                "active_count": int(active.get(studio, 0)), "frozen_count": int(frozen.get(studio, 0)),
+                "new_count": int(new.get(studio, 0)), "cancelled_count": int(cancelled.get(studio, 0)),
+            })
+    return pd.DataFrame(rows)
+
+
 AGE_BUCKET_BINS = [0, 30, 60, 90, 180, 365, 730, float("inf")]
 AGE_BUCKET_LABELS = ["0-30 days", "30-60 days", "60-90 days", "3-6 months",
                       "6-12 months", "12-24 months", "24+ months"]
@@ -549,6 +602,10 @@ def main():
     history_df = build_history(df)
     print(f"History: {history_df.shape[0]} rows")
 
+    print("\nBuilding daily membership snapshots (for the Weekly Studio Report)...")
+    daily_df = build_daily(df)
+    print(f"Daily: {daily_df.shape[0]} rows")
+
     print("\nBuilding membership age pyramid...")
     age_pyramid_df = build_age_pyramid(df)
     print(f"Age pyramid: {age_pyramid_df.shape[0]} rows")
@@ -563,6 +620,8 @@ def main():
         print(live_status_df.head(10).to_string())
         print("\n--- History (tail) ---")
         print(history_df.tail(10).to_string())
+        print("\n--- Daily (tail) ---")
+        print(daily_df.tail(10).to_string())
         print("\n--- Age pyramid ---")
         print(age_pyramid_df.to_string())
         print("\n--- Customer log (head) ---")
@@ -571,6 +630,7 @@ def main():
 
     write_to_sheet(live_status_df, TAB_LIVE_STATUS)
     write_to_sheet(history_df, TAB_HISTORY)
+    write_to_sheet(daily_df, TAB_MEMBERSHIP_DAILY)
     write_to_sheet(age_pyramid_df, TAB_AGE_PYRAMID)
     write_to_sheet(customer_log_df, TAB_CUSTOMER_LOG)
 
