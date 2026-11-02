@@ -20,7 +20,7 @@ LOCATIONS = {
     "Marylebone": 48750,
     "Shoreditch": 48783,
     "Canary Wharf": 48816,
-    # "London Bridge": <add once it exists in Mariana Tek>,
+    "London Bridge": 48849,
 }
 STUDIOS = list(LOCATIONS)
 
@@ -37,6 +37,7 @@ DASHBOARD_SHEET_ID = "1x45OvS9nhKMTWQ7VQhsfNOkHkNYm8IEp0oiPYf1GFEE"
 TAB_LIVE_STATUS = "Membership_Live_Status"
 TAB_HISTORY = "Membership_History"
 TAB_CUSTOMER_LOG = "Membership_Customer_Log"
+TAB_MEMBERSHIP_DAILY = "Membership_Daily"   # one row per studio per day: powers rolling 7-day windows (Weekly Studio Report)
 TAB_AGE_PYRAMID = "Membership_Age_Pyramid"
 
 TAB_INTRO_LIVE = "IntroOffers_Live"
