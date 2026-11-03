@@ -415,6 +415,25 @@ def build_history(df):
     return pd.concat(results, ignore_index=True)
 
 
+UNASSIGNED_STUDIO = "(no purchase location)"
+
+
+def report_attribution(df):
+    """Memberships are attributed to the studio where they were PURCHASED
+    (purchase_location). Some have none recorded (e.g. created by an admin):
+    they belong to no studio, so they are left out of every studio's numbers.
+    Say how many, so that gap is visible instead of silent."""
+    no_loc = df["studio"].isna()
+    ongoing = df["cancellation_datetime"].isna() & df["start_date"].notna()
+    print("\nAttribution (studio = where the membership was purchased):")
+    print(df.assign(_studio=df["studio"].fillna(UNASSIGNED_STUDIO)).groupby("_studio").agg(
+        memberships=("id", "size"), ongoing=("id", lambda x: int(ongoing[x.index].sum()))).to_string())
+    if no_loc.any():
+        print(f"  NOTE: {int(no_loc.sum())} of {len(df)} memberships ({100 * no_loc.mean():.1f}%) have no purchase location "
+              f"({int((no_loc & ongoing).sum())} currently ongoing). They are not counted in any studio's numbers; "
+              f"the daily tab lists them under '{UNASSIGNED_STUDIO}'.")
+
+
 def build_daily(df):
     """Daily membership snapshots, one row per studio per day -- the same
     rules as build_history, but at daily instead of weekly resolution, so
@@ -434,7 +453,12 @@ def build_daily(df):
     weekly history's new_count for the following Monday, and the daily
     active_count for the Sunday equals that Monday's weekly active_count.
     Covers every day up to and including yesterday.
+
+    Memberships with no purchase location are listed under the studio label
+    "(no purchase location)" so the gap is visible; the report ignores that
+    label in the studio blocks and mentions the count in its status line.
     """
+    df = df.assign(studio=df["studio"].fillna(UNASSIGNED_STUDIO)) if df["studio"].isna().any() else df
     valid_start = df["start_date"].notna()
     first = df.loc[valid_start, "start_date"].min().normalize()
     last = pd.Timestamp.now(tz="utc").normalize() - pd.Timedelta(days=1)
@@ -593,6 +617,7 @@ def write_to_sheet(df, tab_name, max_retries=4):
 
 def main():
     df = pull_and_clean()
+    report_attribution(df)
 
     print("\nBuilding live status view...")
     live_status_df = build_live_status(df)
