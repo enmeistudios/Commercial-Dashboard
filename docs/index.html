@@ -2351,7 +2351,7 @@ function wrInit() { if (!WR.end) WR.end = wrYesterday(); }
 function wrNotesHtml(anyMissing) {
   return `<p><strong>Windows.</strong> By default &ldquo;the last 7 days&rdquo; is the 7 days ending yesterday, compared with the 7 days before that. Use Earlier / Later (steps of 7 days) or the date box to report on a different window.</p>
   <p><strong>Utilisation</strong> and <strong>avg paid visit %</strong> are the same per-class averages used on Class Performance (checked-in as % of capacity; paid visits = checked in + late cancels and no-shows that carried a fee, plus private-class holds). Recovery Boots and Full Body are excluded. <strong>Total class attendance</strong> = checked-in visits. <strong>Average classes per day</strong> = classes &divide; 7.</p>
-  <p><strong>Active memberships</strong> = ongoing memberships (not cancelled, including frozen and payment-failure) at the end of the window&rsquo;s last day; <strong>new memberships sold</strong> = memberships started in the window, excluding upgrades, downgrades and studio switches &mdash; both on the same rules as the Membership Health pages, calculated daily.</p>
+  <p><strong>Active memberships</strong> = ongoing memberships (not cancelled, including frozen and payment-failure) at the end of the window&rsquo;s last day, counted under the studio where the membership was <strong>purchased</strong> (including all-studio memberships); <strong>new memberships sold</strong> = memberships started in the window, excluding upgrades, downgrades and studio switches &mdash; both on the same rules as the Membership Health pages, calculated daily.</p>
   <p><strong>Intro offers sold</strong> = intro offers purchased in the window at this studio. Offers that aren&rsquo;t tied to one studio are recorded under &ldquo;All Studios&rdquo; and are not in a single studio&rsquo;s count. <strong>Conversion rate</strong> = those purchasers who went on to buy a membership &divide; those purchasers. Recent days&rsquo; rates are still maturing, since people can convert for weeks after starting.</p>
   <p><strong>KPIs</strong> come from the commercial KPI notes. A studio counts as new for its first ${WR_KPI.newStudioMonths} months, judged from its first class in the data. Green = on or ahead of the KPI, amber = within 10% below, red = more than 10% below. For established studios, average classes per day is shown for context only.</p>
   <p><strong>Data freshness.</strong> Memberships refresh daily at 08:00 UTC, intro offers at 09:00 UTC and classes at 10:00 UTC. For complete numbers for yesterday, run the report after 10:00 UTC.</p>` +
@@ -2399,7 +2399,7 @@ function wrMemStatus(end, studios) {
   const dates = MEM_DAILY_ROWS.map(r => wrDay(r.date)).filter(ok).sort();
   if (!dates.length) return { level: 'bad', text: `Membership data: Membership_Daily has ${MEM_DAILY_ROWS.length.toLocaleString()} rows but its date column is not in YYYY-MM-DD form (first value: “${String(MEM_DAILY_ROWS[0].date)}”). Tell Claude, this needs a small fix.` };
   const latest = dates[dates.length - 1];
-  const inTab = Array.from(new Set(MEM_DAILY_ROWS.map(r => r.studio)));
+  const inTab = Array.from(new Set(MEM_DAILY_ROWS.map(r => r.studio))).filter(x => x !== '(no purchase location)');
   const withData = studios.filter(st => !wrCompute(st, end).noData);
   const absent = withData.filter(st => !inTab.includes(st));
   const parts = []; let level = 'ok';
@@ -2411,6 +2411,10 @@ function wrMemStatus(end, studios) {
   } else if (absent.length) {
     parts.push(`No membership rows yet for ${absent.join(', ')}: expected until they sell a membership, otherwise the studio name doesn't match (names in the tab: ${inTab.join(', ')}).`);
   }
+  // Memberships with no purchase location belong to no studio; the pipeline lists them under their own label so the gap is visible.
+  const NONE = '(no purchase location)';
+  const noLoc = MEM_DAILY_ROWS.filter(r => r.studio === NONE && wrDay(r.date) === latest).reduce((n, r) => n + (Number(r.active_count) || 0), 0);
+  if (noLoc > 0) parts.push(`${noLoc.toLocaleString()} ongoing membership${noLoc === 1 ? ' has' : 's have'} no purchase location in Mariana Tek, so ${noLoc === 1 ? 'it is' : 'they are'} not counted under any studio.`);
   return { level, text: parts.join(' ') };
 }
 
