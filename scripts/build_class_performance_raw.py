@@ -69,7 +69,7 @@ import build_class_performance_dashboard_data as base  # noqa: E402
 from config import (  # noqa: E402
     LOCATIONS, INSTRUCTOR_NAME_OVERRIDES, CLASS_PERFORMANCE_HISTORY_START,
     TAB_CLASS_SESSIONS, TAB_CLASS_HISTORY, TAB_COACH_SCORECARD,
-    TAB_CLASS_CANCELLATIONS, TAB_CLASS_COMPARE_SUMMARY, TAB_CLASS_COMPARE_DETAIL,
+    TAB_CLASS_CANCELLATIONS, TAB_CLASS_CANCELLATIONS_DAILY, TAB_CLASS_COMPARE_SUMMARY, TAB_CLASS_COMPARE_DETAIL,
 )
 
 # Every reservation status we know about. Anything else seen in the data is
@@ -408,7 +408,8 @@ def build_raw_frames(start, end):
     status_totals = Counter()
     for _, _, counts in fetched:
         for per_class in counts.values():
-            status_totals.update({k: v for k, v in per_class.items() if not str(k).startswith("pending:")})
+            # counters that are NOT reservation statuses ("pending:<type>" and "tp:<platform>") must not be listed as statuses
+            status_totals.update({k: v for k, v in per_class.items() if not str(k).startswith(("pending:", "tp:"))})
     print("\nReservation statuses seen (count):")
     for st, n in status_totals.most_common():
         print(f"  {str(st):<20} {n:>8}{'' if st in KNOWN_STATUSES else '   <-- UNKNOWN STATUS'}")
@@ -535,6 +536,33 @@ def compare_to_report(raw_clean, days):
 # --------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------
+def build_cancellations_daily(cancelled, start_date, end_date):
+    """Cancelled classes per studio per day, counted on the day the class was
+    SCHEDULED (the same basis as the weekly cancellations tab). One row per
+    studio per day, zeros included, so a missing day can't be mistaken for a
+    zero. Two counts:
+      cancelled_classes = real classes only (Recovery Boots and Full Body
+                          excluded, exactly like 'classes delivered');
+      cancelled_all     = every class type (the weekly tab's basis).
+    Powers the Weekly Studio Report's rolling 7-day windows."""
+    days = pd.date_range(start_date, end_date, freq="D")
+    grid = pd.MultiIndex.from_product([days, list(LOCATIONS)], names=["day", "studio"]).to_frame(index=False)
+    if cancelled is None or len(cancelled) == 0:
+        grid["cancelled_classes"] = 0
+        grid["cancelled_all"] = 0
+    else:
+        c = cancelled.copy()
+        c["day"] = pd.to_datetime(c["start_date"]).dt.normalize()
+        c["studio"] = c["location"]
+        types = c["class_type"] if "class_type" in c.columns else pd.Series("", index=c.index)
+        c["_real"] = ~types.astype(str).str.strip().str.lower().isin(base.EXCLUDED_CLASS_TYPES)
+        counts = c.groupby(["day", "studio"]).agg(cancelled_all=("studio", "size"), cancelled_classes=("_real", "sum")).reset_index()
+        grid = grid.merge(counts, on=["day", "studio"], how="left")
+        grid[["cancelled_classes", "cancelled_all"]] = grid[["cancelled_classes", "cancelled_all"]].fillna(0).astype(int)
+    grid["date"] = grid["day"].dt.strftime("%Y-%m-%d")
+    return grid[["date", "studio", "cancelled_classes", "cancelled_all"]]
+
+
 def add_direct_bookings(df):
     """Direct = every paid visit that did NOT come through a third-party
     platform (memberships, credit packs, comps, private-class holds), so
@@ -558,6 +586,8 @@ def main():
     cancellations_df = base.build_cancellations_history(cancelled, start_date)
     print(f"Raw build: {int(cancellations_df['cancelled_classes'].sum()) if len(cancellations_df) else 0} cancelled classes since {start_date}.")
     history_df = base.build_class_history(sessions_df)
+    cancellations_daily_df = build_cancellations_daily(cancelled, start_date, end_date)
+    print(f"Daily cancellations: {len(cancellations_daily_df)} rows ({int(cancellations_daily_df['cancelled_classes'].sum())} real classes cancelled, {int(cancellations_daily_df['cancelled_all'].sum())} of all types).")
     scorecard_df = base.build_coach_scorecard(sessions_df)
     sessions_export = sessions_df.drop(columns=["Instructor_List"]).copy()
 
@@ -579,12 +609,15 @@ def main():
         print(history_df.tail(12).to_string())
         print("\n--- Cancellations ---")
         print(cancellations_df.tail(12).to_string())
+        print("\n--- Cancellations, daily (tail) ---")
+        print(cancellations_daily_df.tail(10).to_string())
         return
 
     base.write_to_sheet(sessions_export, TAB_CLASS_SESSIONS)
     base.write_to_sheet(history_df, TAB_CLASS_HISTORY)
     base.write_to_sheet(scorecard_df, TAB_COACH_SCORECARD)
     base.write_to_sheet(cancellations_df, TAB_CLASS_CANCELLATIONS)
+    base.write_to_sheet(cancellations_daily_df, TAB_CLASS_CANCELLATIONS_DAILY)
     if len(summary_df):
         base.write_to_sheet(summary_df, TAB_CLASS_COMPARE_SUMMARY)
     if len(detail_df):
