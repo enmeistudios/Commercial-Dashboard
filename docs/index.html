@@ -2165,14 +2165,13 @@ function wrStudioAge(studio, refIso) {
   return { months: (wrToDate(refIso) - wrToDate(open)) / (1000 * 60 * 60 * 24 * 30.4375), open: String(open).slice(0, 10) };
 }
 
-// Classes, utilisation, paid visit %, attendance: the same per-class averages as the Class Performance scorecards.
+// Classes, paid visit %, attendance: the same per-class averages as the Class Performance scorecards.
 function wrClassStats(studio, startIso, endIso) {
   ensureCPNormalized();
   const rows = CP_NORM_ROWS.filter(r => r.studio === studio && !r.isExcluded && r.date >= startIso && r.date <= endIso);
   const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
   return {
     classes: rows.length,
-    util: mean(rows.filter(r => r.utilPct != null).map(r => r.utilPct)),
     paid: mean(rows.filter(r => r.paidPct != null).map(r => r.paidPct)),
     attendance: rows.reduce((s, r) => s + r.checkedIn, 0),
     perDay: rows.length / 7,
@@ -2273,7 +2272,6 @@ function wrCompute(studio, end) {
     status: k.ref ? 'ref' : wrKpiStatus(value, k.target), diff: k.ref ? '' : wrVsKpi(unit, value, k.target), ref: !!k.ref,
   };
   const metrics = [
-    metric('util', 'Average class utilisation', 'pct', c.util, p.util, true, null),
     metric('paid', 'Avg paid visit %', 'pct', c.paid, p.paid, true, kpiOf('pct', c.paid, kPaid)),
     metric('classes', 'Total classes delivered', 'count', c.classes, p.classes, false, null),
     metric('cancelled', 'Classes cancelled', 'count', xc, xp, 'down', null),
@@ -2286,62 +2284,111 @@ function wrCompute(studio, end) {
     metric('intro', 'Intro offers sold', 'count', ic.sold, ip.sold, true, kpiOf('count', ic.sold, kIntro)),
     metric('conv', 'Intro offer conversion rate', 'pct', ic.rate, ip.rate, true, null),
   ];
-  const d = { studio, end, cur, prv, age, isNew, noData, stageText, kpiLine, reference, metrics, hasMembership: !!(mc && mp) };
+  const d = { studio, end, cur, prv, age, isNew, noData, stageText, kpiLine, reference, metrics, hasMembership: !!(mc && mp),
+    introCounts: { sold: ic.sold, converted: ic.converted, prevSold: ip.sold, prevConverted: ip.converted } };
   d.summary = noData ? '' : wrSummary(d);
   return d;
 }
 
-// Plain-language draft from the numbers only (no adjectives beyond up/down/ahead/below), to be edited.
+// Plain-English takeaways for people who don't read data: a short bullet list that says what happened and what it
+// means, built from the numbers only (so it's a draft to edit, never invented). Each bullet starts "Label: ...".
+const wrList = a => a.length <= 1 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
 function wrSummary(d) {
   const m = k => d.metrics.find(x => x.key === k);
-  const dir = (delta, up = 'up', down = 'down') => delta > 0 ? up : down;
-  const num = (mm, delta) => mm.unit === 'pct' ? `${Math.abs(delta).toFixed(1)} points` : mm.unit === 'dec' ? Math.abs(delta).toFixed(1) : Math.abs(Math.round(delta)).toLocaleString();
-  const vsPrev = mm => { const c = mm.change; return (c.delta == null) ? '' : c.delta === 0 ? 'unchanged on the previous 7 days' : `${dir(c.delta)} ${num(mm, c.delta)} on the previous 7 days`; };
-  const paren = mm => { const v = vsPrev(mm); return v ? ` (${v})` : ''; };
-  const kpiClause = mm => {
-    if (!mm.kpi || mm.kpi.ref || mm.curr == null) return '';
-    return mm.curr >= mm.kpi.target ? `, ahead of the ${mm.kpi.targetText} KPI` : `, below the ${mm.kpi.targetText} KPI`;
+  const cls = m('classes'), canc = m('cancelled'), att = m('attendance'), paid = m('paid'), perday = m('perday'),
+    act = m('active'), frz = m('frozen'), neu = m('newmem'), intro = m('intro'), conv = m('conv');
+  const n = v => Math.round(v).toLocaleString();
+  const pctChg = (a, b) => (b ? Math.round(100 * (a - b) / b) : null);
+  const vsKpi = (mm, per) => {            // "ahead of / in line with / just below / below the <target> target"
+    const k = mm.kpi; if (!k || k.ref) return '';
+    const word = mm.curr > k.target ? 'ahead of' : mm.curr === k.target ? 'in line with' : (k.status === 'near' ? 'just below' : 'below');
+    return `${word} the ${k.targetText} target`;
   };
-  const canc = m('cancelled');
-  const util = m('util'), cls = m('classes'), att = m('attendance'), paid = m('paid'), perday = m('perday'), act = m('active'), frz = m('frozen'), neu = m('newmem'), intro = m('intro'), conv = m('conv');
-  const out = [];
-
   const noClasses = cls.curr === 0 && (cls.prev === 0 || cls.prev == null);
-  if (noClasses) {
-    out.push(`No classes were recorded for ${d.studio} in the last 7 days.`);
-  } else if (cls.curr != null) {
-    let s = `Enmei ${d.studio} delivered ${cls.currText} classes${paren(cls)}`;
-    if (att.change.delta != null) s += att.change.delta === 0 ? `, with total attendance unchanged at ${att.currText}` : `, with total attendance ${dir(att.change.delta)} ${num(att, att.change.delta)} to ${att.currText}`;
-    if (util.change.delta != null && util.curr != null) s += ` and average utilisation ${util.change.delta === 0 ? 'unchanged at' : `${dir(util.change.delta)} ${num(util, util.change.delta)} to`} ${util.currText}`;
-    out.push(s + '.');
+  if (noClasses) return `• No classes were recorded for ${d.studio} in the last 7 days.`;
+  const bullets = [];
+
+  // 1. The headline: how are we doing against the KPIs?
+  const label = { paid: 'paid visit %', newmem: 'new memberships', intro: 'intro offers', perday: 'classes per day' };
+  const scored = [paid, neu, intro, perday].filter(x => x && x.kpi && !x.kpi.ref && x.curr != null);
+  if (scored.length) {
+    const ok = scored.filter(x => x.kpi.status === 'ok'), behind = scored.filter(x => x.kpi.status !== 'ok');
+    bullets.push(`Overall: ${ok.length} of ${scored.length} KPIs on target${ok.length ? ` (${wrList(ok.map(x => label[x.key]))})` : ''}.` +
+      (behind.length ? ` Behind: ${wrList(behind.map(x => label[x.key] + (x.kpi.status === 'near' ? ' (close)' : '')))}.` : ''));
   }
-  if (canc.curr != null && !noClasses) {
-    out.push(`${canc.curr === 0 ? 'No classes were cancelled' : canc.curr === 1 ? '1 class was cancelled' : `${canc.currText} classes were cancelled`}${paren(canc)}.`);
+
+  // 2. Attendance, and whether classes were fuller or just more numerous
+  if (att.curr != null) {
+    const dA = att.change.delta, dC = cls.change.delta, p = dA != null ? pctChg(att.curr, att.prev) : null;
+    const apc = cls.curr ? att.curr / cls.curr : null, apcPrev = cls.prev ? att.prev / cls.prev : null;
+    const fuller = (apc != null && apcPrev) ? (apc - apcPrev) / apcPrev : null;
+    let s = `${n(att.curr)} check-ins`;
+    if (dA != null) s += dA === 0 ? ' (unchanged)' : `, ${dA > 0 ? 'up' : 'down'} ${n(Math.abs(dA))}${p != null ? ` (${p > 0 ? '+' : ''}${p}%)` : ''}`;
+    s += ` from ${n(cls.curr)} classes${dC == null ? '' : dC === 0 ? ' (unchanged)' : ` (${dC > 0 ? 'up' : 'down'} ${n(Math.abs(dC))})`}`;
+    if (fuller != null && Math.abs(fuller) > 0.03) s += ` — classes were ${fuller > 0 ? 'fuller' : 'emptier'} on average`;
+    bullets.push(`Attendance: ${s}.`);
   }
-  if (paid.curr != null && !noClasses) {
-    const ch = paid.change.delta == null ? '' : paid.change.delta === 0 ? ' (unchanged on the previous 7 days)' : ` (${dir(paid.change.delta)} ${num(paid, paid.change.delta)} on the previous 7 days)`;
-    let s = `Average paid visit % was ${paid.currText}${ch}${kpiClause(paid)}`;
-    if (d.isNew && perday.kpi && !perday.kpi.ref && perday.curr != null) s += `, and classes per day were ${perday.currText}${kpiClause(perday)}`;
-    out.push(s + '.');
+
+  // 3. Paid visits (the share of spots that were paid for)
+  if (paid.curr != null) {
+    const dP = paid.change.delta;
+    let s = `${paid.currText} of class spots were paid for`;
+    if (dP != null && dP !== 0) s += ` (${dP > 0 ? 'up' : 'down'} ${Math.abs(dP).toFixed(1)} points)`;
+    const v = vsKpi(paid); if (v) s += `, ${v}`;
+    bullets.push(`Paid visits: ${s}.`);
   }
-  if (neu.curr != null || act.curr != null) {
-    let s = '';
-    if (neu.curr != null) s += `${neu.currText} new membership${neu.curr === 1 ? ' was' : 's were'} sold${paren(neu)}${kpiClause(neu)}`;
-    if (act.curr != null) {
-      const phrase = act.change.delta == null ? `active memberships were ${act.currText}`
-        : act.change.delta === 0 ? `active memberships were unchanged at ${act.currText}`
-        : `active memberships ${act.change.delta > 0 ? 'rose by' : 'fell by'} ${num(act, act.change.delta)} to ${act.currText}`;
-      s += `${s ? ', and ' : ''}${phrase}`;
-      if (frz.curr != null && act.curr > 0) s += `, of which ${frz.currText} ${frz.curr === 1 ? 'is' : 'are'} frozen (${(100 * frz.curr / act.curr).toFixed(1)}%)`;
+
+  // 4. New memberships
+  if (neu.curr != null) {
+    const dN = neu.change.delta;
+    let s = `${n(neu.curr)} sold`;
+    if (dN != null && dN !== 0) s += ` (${dN > 0 ? 'up' : 'down'} ${n(Math.abs(dN))} on the previous 7 days)`;
+    const v = vsKpi(neu); if (v) s += `, ${v}`;
+    bullets.push(`New memberships: ${s}.`);
+  }
+
+  // 5. The membership base, in plain terms, plus frozen
+  if (act.curr != null) {
+    const dA = act.change.delta;
+    let s = dA == null ? `${n(act.curr)} active` : dA === 0 ? `active memberships held steady at ${n(act.curr)}`
+      : `active memberships ${dA > 0 ? 'rose' : 'fell'} by ${n(Math.abs(dA))} to ${n(act.curr)}`;
+    if (dA != null && dA < 0) s += neu.curr > 0 ? ' — more people left than joined' : ' — people left and no one joined';
+    else if (dA != null && dA > 0) s += ' — the membership base is growing';
+    if (frz.curr != null) {
+      const dF = frz.change.delta, share = act.curr ? `${(100 * frz.curr / act.curr).toFixed(1)}% of active` : '';
+      s += `; ${n(frz.curr)} ${frz.curr === 1 ? 'is' : 'are'} frozen (${share}${dF ? `, ${dF > 0 ? 'up' : 'down'} ${n(Math.abs(dF))}` : ''})`;
+      if (dF > 0) s += ' — paused, not cancelled, but worth watching';
+      else if (dF < 0) s += ' — members coming back';
     }
-    if (s) out.push(s.charAt(0).toUpperCase() + s.slice(1) + '.');
+    bullets.push(`Membership base: ${s}.`);
   }
+
+  // 6. Intro offers, and how many buyers have already joined
   if (intro.curr != null) {
-    let s = `${intro.currText} intro offer${intro.curr === 1 ? ' was' : 's were'} sold${paren(intro)}${kpiClause(intro)}`;
-    if (conv.curr != null && conv.prev != null) s += `, with conversion to membership ${conv.change.delta === 0 ? 'unchanged at' : `${conv.change.delta > 0 ? 'improving' : 'slipping'} from ${conv.prevText} to`} ${conv.currText}`;
-    out.push(s + '.' + (conv.curr != null ? ' Conversion for the most recent days will rise as more of those intro offers have time to convert.' : ''));
+    let s = `${n(intro.curr)} sold`;
+    const v = vsKpi(intro); if (v) s += `, ${v}`;
+    s += '.';
+    const ic = d.introCounts;
+    if (ic && ic.sold > 0 && conv.curr != null) {
+      const trend = conv.prev == null ? '' : Math.abs(conv.curr - conv.prev) < 0.5 ? ', same as before' : `, ${conv.curr > conv.prev ? 'up' : 'down'} from ${Math.round(conv.prev)}%`;
+      s += ` ${ic.converted} of ${ic.sold} buyers ${ic.converted === 1 ? 'has' : 'have'} already become members (${Math.round(conv.curr)}%${trend}) — recent buyers still have time to join.`;
+    }
+    bullets.push(`Intro offers: ${s}`);
   }
-  return out.join(' ');
+
+  // 7. Cancelled classes (fewer is better)
+  if (canc.curr != null) {
+    const dC = canc.change.delta;
+    let s = canc.curr === 0 ? 'none' : `${n(canc.curr)} ${canc.curr === 1 ? 'class' : 'classes'} cancelled`;
+    s += dC == null ? '' : dC === 0 ? ' (same as the previous 7 days)' : `, ${n(Math.abs(dC))} ${dC < 0 ? 'fewer' : 'more'} than the previous 7 days`;
+    bullets.push(`Cancellations: ${s}.${dC > 0 ? ' Worth checking why.' : ''}`);
+  }
+
+  // 8. New studios only: is the timetable on the ramp-up plan?
+  if (d.isNew && perday.kpi && !perday.kpi.ref && perday.curr != null) {
+    bullets.push(`Timetable: ${perday.currText} classes a day against a target of ${perday.kpi.targetText} — ${perday.curr >= perday.kpi.target ? 'on target' : 'behind, the timetable is still building'}.`);
+  }
+  return bullets.map(b => '• ' + b).join('\n');
 }
 
 const wrKpiLabel = mm => mm.kpi.ref ? 'Reference' : ({ ok: 'On / ahead of KPI', near: 'Slightly below', bad: 'Below KPI' }[mm.kpi.status] || '');
@@ -2378,7 +2425,7 @@ function wrInit() { if (!WR.end) WR.end = wrYesterday(); }
 
 function wrNotesHtml(anyMissing) {
   return `<p><strong>Windows.</strong> By default &ldquo;the last 7 days&rdquo; is the 7 days ending yesterday, compared with the 7 days before that. Use Earlier / Later (steps of 7 days) or the date box to report on a different window.</p>
-  <p><strong>Utilisation</strong> and <strong>avg paid visit %</strong> are the same per-class averages used on Class Performance (checked-in as % of capacity; paid visits = checked in + late cancels and no-shows that carried a fee, plus private-class holds). Recovery Boots and Full Body are excluded. <strong>Total class attendance</strong> = checked-in visits. <strong>Average classes per day</strong> = classes &divide; 7. <strong>Classes cancelled</strong> = classes that were scheduled in the window and then cancelled, counted on the day they were scheduled, with the same exclusions as classes delivered; fewer is better, so a rise shows red. The Class Performance page&rsquo;s &ldquo;Classes cancelled&rdquo; counts every class type, so it can be higher.</p>
+  <p><strong>Avg paid visit %</strong> is the same per-class average used on Class Performance: the share of class spots that were paid for (checked in, plus late cancels and no-shows that carried a fee, plus private-class holds). Recovery Boots and Full Body are excluded. <strong>Total class attendance</strong> = checked-in visits. <strong>Average classes per day</strong> = classes &divide; 7. <strong>Classes cancelled</strong> = classes that were scheduled in the window and then cancelled, counted on the day they were scheduled, with the same exclusions as classes delivered; fewer is better, so a rise shows red. The Class Performance page&rsquo;s &ldquo;Classes cancelled&rdquo; counts every class type, so it can be higher.</p>
   <p><strong>Active memberships</strong> = ongoing memberships (not cancelled, including frozen and payment-failure) at the end of the window&rsquo;s last day, counted under the studio where the membership was <strong>purchased</strong> (including all-studio memberships); <strong>new memberships sold</strong> = memberships started in the window, excluding upgrades, downgrades and studio switches &mdash; both on the same rules as the Membership Health pages, calculated daily. <strong>Frozen memberships</strong> = the ongoing memberships that are under an active freeze at that same moment (they are already included in the active count); the grey line shows frozen as a share of active. The change is shown without red or green, since a rise or fall in frozen isn&rsquo;t clearly good or bad.</p>
   <p><strong>Intro offers sold</strong> = intro offers purchased in the window at this studio. Offers that aren&rsquo;t tied to one studio are recorded under &ldquo;All Studios&rdquo; and are not in a single studio&rsquo;s count. <strong>Conversion rate</strong> = those purchasers who went on to buy a membership &divide; those purchasers. Recent days&rsquo; rates are still maturing, since people can convert for weeks after starting.</p>
   <p><strong>KPIs</strong> come from the commercial KPI notes. A studio counts as new for its first ${WR_KPI.newStudioMonths} months, judged from its first class in the data. Green = on or ahead of the KPI, amber = within 10% below, red = more than 10% below. For established studios, average classes per day is shown for context only.</p>
@@ -2387,7 +2434,7 @@ function wrNotesHtml(anyMissing) {
 }
 
 function wrGlanceHtml(all) {
-  const cols = [['classes', 'Classes'], ['cancelled', 'Cancelled'], ['util', 'Utilisation'], ['paid', 'Avg paid visit %'], ['attendance', 'Attendance'], ['active', 'Active members'], ['frozen', 'Frozen'], ['newmem', 'New members'], ['intro', 'Intro offers'], ['conv', 'Intro conversion']];
+  const cols = [['classes', 'Classes'], ['cancelled', 'Cancelled'], ['paid', 'Avg paid visit %'], ['attendance', 'Attendance'], ['active', 'Active members'], ['frozen', 'Frozen'], ['newmem', 'New members'], ['intro', 'Intro offers'], ['conv', 'Intro conversion']];
   const rows = all.map(d => {
     if (d.noData) return `<tr><td class="wr-studio-cell" onclick="wrSetView('${d.studio.replace(/'/g, "\\'")}')">${wrEsc(d.studio)}</td><td colspan="${cols.length + 1}" class="wr-soon">Opening soon — no data yet</td></tr>`;
     const tds = cols.map(([k]) => {
@@ -2415,7 +2462,7 @@ function wrBlockHtml(d) {
       <div class="wr-edit" data-kind="summary" contenteditable="true">${wrEsc(e.summary != null ? e.summary : d.summary)}</div>
     </div>
     <div class="tc" style="margin-bottom:12px"><div class="tscroll"><table class="wr-table"><thead><tr><th>Metric</th><th>${prvLbl}<div class="wr-kpi-sub">previous 7 days</div></th><th>${curLbl}<div class="wr-kpi-sub">last 7 days</div></th><th>Change</th><th>KPI</th></tr></thead><tbody>${body}</tbody></table></div></div>
-    <div class="cc"><div class="cch"><div><div class="cct">Your commentary</div><div class="ccs">Optional &mdash; type here and it is included in the export, or add it in Word afterwards.</div></div></div>
+    <div class="cc"><div class="cch"><div><div class="cct">Your commentary</div><div class="ccs">Optional &mdash; type here and it is included in the export, or add it in Word afterwards. Start a line with &ldquo;&bull; &rdquo; or &ldquo;- &rdquo; to make it a bullet.</div></div></div>
       <div class="wr-edit" data-kind="commentary" contenteditable="true" style="min-height:70px">${wrEsc(e.commentary || '')}</div></div>
   </div>`;
 }
@@ -2502,8 +2549,19 @@ function wrRun(text, o = {}) {
 }
 function wrP(runs, o = {}) {
   const pr = (o.keepNext ? '<w:keepNext/>' : '') + (o.pageBreakBefore ? '<w:pageBreakBefore/>' : '') +
+    (o.bullet ? '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>' : '') +
     `<w:spacing w:before="${o.before || 0}" w:after="${o.after == null ? 80 : o.after}"${o.line ? ` w:line="${o.line}" w:lineRule="auto"` : ''}/>`;
   return `<w:p><w:pPr>${pr}</w:pPr>${Array.isArray(runs) ? runs.join('') : runs}</w:p>`;
+}
+function wrBulletLines(text, runOpts, pOpts, keepBlank) {
+  const lines = String(text || '').split(/\r?\n/).filter(l => keepBlank || l.trim() !== '');
+  return lines.map(l => {
+    const mm = /^\s*[•\-*]\s+(.*)$/.exec(l);
+    if (!mm) return wrP(wrRun(l, runOpts), pOpts);
+    const lab = /^([^:]{2,30}):\s+(.*)$/.exec(mm[1]);
+    const runs = lab ? [wrRun(lab[1] + ': ', { ...runOpts, bold: true }), wrRun(lab[2], runOpts)] : [wrRun(mm[1], runOpts)];
+    return wrP(runs, { ...pOpts, bullet: true });
+  }).join('');
 }
 const wrLines = (text, runOpts, pOpts) => String(text || '').split(/\r?\n/).map(l => wrP(wrRun(l, runOpts), pOpts)).join('');
 function wrTc(paras, w, o = {}) {
@@ -2517,7 +2575,7 @@ function wrTbl(widths, rows, padX = 100) {
 const wrChgStyle = cls => cls === 'better' ? { fill: WR_X.betterFill, color: WR_X.betterText } : cls === 'worse' ? { fill: WR_X.worseFill, color: WR_X.worseText } : { color: WR_X.flatText };
 
 function wrDocxGlance(all) {
-  const cols = [['classes', 'Classes'], ['cancelled', 'Cancelled'], ['util', 'Utilisation'], ['paid', 'Paid visit %'], ['attendance', 'Attendance'], ['active', 'Active members'], ['frozen', 'Frozen'], ['newmem', 'New members'], ['intro', 'Intro offers'], ['conv', 'Conversion']];
+  const cols = [['classes', 'Classes'], ['cancelled', 'Cancelled'], ['paid', 'Paid visit %'], ['attendance', 'Attendance'], ['active', 'Active members'], ['frozen', 'Frozen'], ['newmem', 'New members'], ['intro', 'Intro offers'], ['conv', 'Conversion']];
   const first = 1300, rest = Math.floor((WR_CONTENT_W - first) / cols.length), widths = [first, ...cols.map(() => rest)];
   const head = wrTr([wrTc([wrP(wrRun('Studio', { bold: true, color: 'FFFFFF', size: 14 }), { after: 0 })], first, { fill: WR_X.dark }),
     ...cols.map(([, l]) => wrTc([wrP(wrRun(l, { bold: true, color: 'FFFFFF', size: 14 }), { after: 0 })], rest, { fill: WR_X.dark }))], true);
@@ -2540,7 +2598,7 @@ function wrDocxSection(d, summary, commentary, pageBreak) {
   if (d.noData) return out.join('') + wrP(wrRun(`Opening soon — no class data yet. ${d.kpiLine}`, { color: WR_X.grey, size: 20 }));
   out.push(wrP(wrRun(`${d.stageText} · Last 7 days: ${wrRange(d.cur.start, d.cur.end)} ${d.cur.end.slice(0, 4)}, compared with ${wrRange(d.prv.start, d.prv.end)}`, { color: WR_X.grey, size: 20 }), { after: 160 }));
   out.push(wrP(wrRun('Commercial performance:', { bold: true, size: 26 }), { after: 80, keepNext: true }));
-  out.push(wrLines(summary, { size: 22 }, { after: 160, line: 300 }));
+  out.push(wrBulletLines(summary, { size: 22 }, { after: 80, line: 276 }));
 
   const widths = [2700, 1500, 1500, 1600, WR_CONTENT_W - 7300];
   const hc = (title, sub, w) => wrTc([wrP(wrRun(title, { bold: true, color: 'FFFFFF', size: 20 }), { after: 0 })].concat(sub ? [wrP(wrRun(sub, { color: 'FFFFFF', size: 16 }), { after: 0 })] : []), w, { fill: WR_X.dark });
@@ -2563,7 +2621,7 @@ function wrDocxSection(d, summary, commentary, pageBreak) {
   out.push(wrP(wrRun(d.kpiLine, { size: 17, color: WR_X.grey }), { before: 120, after: 40 }));
   out.push(wrP(wrRun(d.reference, { size: 17, color: WR_X.grey }), { after: 200 }));
   out.push(wrP(wrRun('Commentary:', { bold: true, size: 26 }), { before: 120, after: 80, keepNext: true }));
-  out.push(commentary ? wrLines(commentary, { size: 22 }, { after: 120, line: 300 }) : wrP([], { after: 240 }).repeat(3));
+  out.push(commentary ? wrBulletLines(commentary, { size: 22 }, { after: 80, line: 276 }, true) : wrP([], { after: 240 }).repeat(3));
   return out.join('');
 }
 
@@ -2609,10 +2667,11 @@ function wrBuildDocx(studios) {
   const H = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
   const documentXml = `${H}<w:document xmlns:w="${WR_W_NS}"><w:body>${body.join('')}<w:sectPr><w:pgSz w:w="${WR_PAGE_W}" w:h="16838"/><w:pgMar w:top="${WR_MARGIN}" w:right="${WR_MARGIN}" w:bottom="${WR_MARGIN}" w:left="${WR_MARGIN}" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`;
   return wrZip([
-    { name: '[Content_Types].xml', text: `${H}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>` },
+    { name: '[Content_Types].xml', text: `${H}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/></Types>` },
     { name: '_rels/.rels', text: `${H}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>` },
     { name: 'word/document.xml', text: documentXml },
-    { name: 'word/_rels/document.xml.rels', text: `${H}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
+    { name: 'word/_rels/document.xml.rels', text: `${H}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/></Relationships>` },
+    { name: 'word/numbering.xml', text: `${H}<w:numbering xmlns:w="${WR_W_NS}"><w:abstractNum w:abstractNumId="0"><w:multiLevelType w:val="hybridMultilevel"/><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/><w:lvlJc w:val="left"/><w:pPr><w:ind w:left="360" w:hanging="260"/></w:pPr><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/></w:rPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>` },
     { name: 'word/styles.xml', text: `${H}<w:styles xmlns:w="${WR_W_NS}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="en-GB"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="259" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style></w:styles>` },
   ]);
 }
