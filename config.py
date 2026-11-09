@@ -69,6 +69,7 @@ TAB_CLASS_CANCELLATIONS = "ClassPerformance_Cancellations"
 
 # --- Class Performance comparison tabs (only written when an optional
 # comparison against report 294 is run; see scripts/build_class_performance_raw.py).
+TAB_CLASS_CANCELLATIONS_DAILY = "ClassPerformance_CancellationsDaily"   # one row per studio per day: powers rolling 7-day windows (Weekly Studio Report)
 TAB_CLASS_COMPARE_SUMMARY = "ClassPerformanceRaw_CompareSummary"
 TAB_CLASS_COMPARE_DETAIL = "ClassPerformanceRaw_CompareDetail"
 
