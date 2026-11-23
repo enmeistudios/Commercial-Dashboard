@@ -2256,9 +2256,7 @@ function wrMembership(studio, startIso, endIso) {
   const endRows = rows.filter(r => wrDay(r.date) === endIso);       // each studio's snapshot at the end of the window's last day
   if (!endRows.length) return null;
   const sum = (arr, k) => arr.reduce((t, r) => t + (Number(r[k]) || 0), 0);
-  // cancelled = real cancellations (upgrades / downgrades / studio switches excluded) -- the same churn count as Membership Health
-  const hasCancel = MEM_DAILY_ROWS.length > 0 && ('cancelled_count' in MEM_DAILY_ROWS[0]);
-  return { active: sum(endRows, 'active_count'), frozen: sum(endRows, 'frozen_count'), added: sum(rows, 'new_count'), cancelled: hasCancel ? sum(rows, 'cancelled_count') : null };
+  return { active: sum(endRows, 'active_count'), frozen: sum(endRows, 'frozen_count'), added: sum(rows, 'new_count') };
 }
 // Intro offers by the day they STARTED (purchase date), as on the Intro Offers pages. Studio-specific offers only:
 // products that aren't tied to one studio are recorded under "All Studios" and so never appear in a single studio's count.
@@ -2378,8 +2376,6 @@ function wrCompute(studio, end) {
     // Frozen is shown without red/green: it is a status to watch, not a clear good or bad (more frozen = more paused revenue, fewer frozen = people returning).
     metric('frozen', 'Frozen memberships', 'count', mc ? mc.frozen : null, mp ? mp.frozen : null, false, null, { curr: shareOf(mc && mc.frozen, mc && mc.active), prev: shareOf(mp && mp.frozen, mp && mp.active) }),
     metric('newmem', 'New memberships sold', 'count', mc ? mc.added : null, mp ? mp.added : null, true, kpiOf('count', mc ? mc.added : null, kMembers)),
-    // Real cancellations in the window (same churn count as Membership Health: upgrades / downgrades / studio switches are not cancellations). Fewer is better.
-    metric('cancelledmem', 'Cancelled memberships', 'count', mc ? mc.cancelled : null, mp ? mp.cancelled : null, 'down', null),
     metric('intro', 'Intro offers sold', 'count', ic.sold, ip.sold, true, kpiOf('count', ic.sold, kIntro),
       { curr: ic.allStudios ? `+ ${ic.allStudios} not tied to a studio` : '', prev: ip.allStudios ? `+ ${ip.allStudios} not tied to a studio` : '' }),
     metric('conv', 'Intro offer conversion (last 30 days)', 'pct', c30.rate, p30.rate, true, null,
@@ -2461,15 +2457,6 @@ function wrSummary(d) {
     bullets.push(`New memberships: ${s}.`);
   }
 
-  // 4b. Cancelled memberships (fewer is better)
-  const canm = m('cancelledmem');
-  if (canm && canm.curr != null) {
-    const dM = canm.change.delta;
-    let s = canm.curr === 0 ? 'none' : `${n(canm.curr)} ${canm.curr === 1 ? 'membership' : 'memberships'} cancelled`;
-    s += dM == null ? '' : dM === 0 ? ' (same as the previous 7 days)' : `, ${n(Math.abs(dM))} ${dM < 0 ? 'fewer' : 'more'} than the previous 7 days`;
-    bullets.push(`Membership cancellations: ${s}.${dM > 0 ? ' Worth checking why.' : ''}`);
-  }
-
   // 5. The membership base, in plain terms, plus frozen
   if (act.curr != null) {
     const dA = act.change.delta;
@@ -2477,11 +2464,6 @@ function wrSummary(d) {
       : `active memberships ${dA > 0 ? 'rose' : 'fell'} by ${n(Math.abs(dA))} to ${n(act.curr)}`;
     if (dA != null && dA < 0) s += neu.curr > 0 ? ' — more people left than joined' : ' — people left and no one joined';
     else if (dA != null && dA > 0) s += ' — the membership base is growing';
-    // New and cancelled are counted by date, active by status, so they do not always add up. Say so, and by how much, instead of leaving it unexplained.
-    if (dA != null && neu.curr != null && canm && canm.curr != null) {
-      const net = neu.curr - canm.curr, gap = dA - net;
-      if (Math.abs(gap) >= 3) s += `; ${n(neu.curr)} joined and ${n(canm.curr)} cancelled (net ${net > 0 ? '+' : ''}${n(net)}), and the other ${gap > 0 ? '+' : '-'}${n(Math.abs(gap))} comes from memberships that started or ended without counting as new or cancelled (such as pending activations, plan switches, cancellations not yet in effect, or terms ending)`;
-    }
     if (frz.curr != null) {
       const dF = frz.change.delta, share = act.curr ? `${(100 * frz.curr / act.curr).toFixed(1)}% of active` : '';
       s += `; ${n(frz.curr)} ${frz.curr === 1 ? 'is' : 'are'} frozen (${share}${dF ? `, ${dF > 0 ? 'up' : 'down'} ${n(Math.abs(dF))}` : ''})`;
@@ -2555,7 +2537,7 @@ function wrNotesHtml(anyMissing) {
   return `<p><strong>All studios combined</strong> (top of the &ldquo;All studios&rdquo; view and first in the all-studios export) pools the studios: classes, attendance, cancellations, memberships and intro offers are <strong>totals</strong>; avg paid visit % is the average over <strong>every class</strong> in all studios; % direct bookings is total direct visits &divide; total paid visits; conversion is over all studio intro-offer buyers. Intro offers that aren&rsquo;t tied to one studio (e.g. Welcome 3) are shown beside the total, not added to it. KPIs are set per studio, so none are shown for the combined view.</p>
   <p><strong>Windows.</strong> By default &ldquo;the last 7 days&rdquo; is the 7 days ending yesterday, compared with the 7 days before that. Use Earlier / Later (steps of 7 days) or the date box to report on a different window.</p>
   <p><strong>% direct bookings</strong> = of the week&rsquo;s paid visits, the share booked directly (memberships, credit packs, comps, private classes); the other split is <strong>third-party</strong> (ClassPass, Wellhub, FitReserve). It is the total of direct visits divided by the total of paid visits, the same calculation as on Class Performance. <strong>Avg paid visit %</strong> is the same per-class average used on Class Performance: the share of class spots that were paid for (checked in, plus late cancels and no-shows that carried a fee, plus private-class holds). Recovery Boots and Full Body are excluded. <strong>Total class attendance</strong> = checked-in visits. <strong>Average classes per day</strong> = classes &divide; 7. <strong>Classes cancelled</strong> = classes that were scheduled in the window and then cancelled, counted on the day they were scheduled, with the same exclusions as classes delivered; fewer is better, so a rise shows red. The Class Performance page&rsquo;s &ldquo;Classes cancelled&rdquo; counts every class type, so it can be higher.</p>
-  <p><strong>Active memberships</strong> = ongoing memberships (status active, frozen, payment-failure or pending; cancelled, terminated, done and converted memberships are not counted) at the end of the window&rsquo;s last day, counted under the studio where the membership was <strong>purchased</strong> (including all-studio memberships); <strong>new memberships sold</strong> = memberships started in the window, excluding upgrades, downgrades and studio switches &mdash; both on the same rules as the Membership Health pages, calculated daily. <strong>New, cancelled and active don&rsquo;t always add up:</strong> new memberships are counted by their start date, cancelled memberships by the date the cancellation was recorded, and active memberships by status at the end of the window. So <em>active last week + new &minus; cancelled</em> can differ from <em>active now</em>, because some memberships move in or out of the active count without being counted as new or cancelled (pending activations counted from their purchase date, plan switches, cancellations recorded but not yet in effect, and terms that simply ended). When the difference is 3 or more, the Membership base takeaway says so and gives the size of it; the membership data run log has a full breakdown by cause. <strong>Cancelled memberships</strong> = memberships that were cancelled in the window (real cancellations only: upgrades, downgrades and studio switches are not cancellations), under the studio where each was purchased &mdash; the same count as churn on Membership Health. Fewer is better, so a rise shows red. <strong>Frozen memberships</strong> = the ongoing memberships that are under an active freeze at that same moment (they are already included in the active count); the grey line shows frozen as a share of active. The change is shown without red or green, since a rise or fall in frozen isn&rsquo;t clearly good or bad.</p>
+  <p><strong>Active memberships</strong> = ongoing memberships (status active, frozen, payment-failure or pending; cancelled, terminated, done and converted memberships are not counted) at the end of the window&rsquo;s last day, counted under the studio where the membership was <strong>purchased</strong> (including all-studio memberships); <strong>new memberships sold</strong> = memberships started in the window, excluding upgrades, downgrades and studio switches &mdash; both on the same rules as the Membership Health pages, calculated daily. <strong>Frozen memberships</strong> = the ongoing memberships that are under an active freeze at that same moment (they are already included in the active count); the grey line shows frozen as a share of active. The change is shown without red or green, since a rise or fall in frozen isn&rsquo;t clearly good or bad.</p>
   <p><strong>Intro offers sold</strong> = intro offers purchased in the window at this studio. Offers that aren&rsquo;t tied to one studio are recorded under &ldquo;All Studios&rdquo; and are not in a single studio&rsquo;s count. <strong>Intro offer conversion (last 30 days)</strong> = of everyone at this studio who bought an intro offer in the 30 days up to the end of the window, the share who have <em>since</em> either joined on any membership tier or bought a pack of 5 or more classes. Someone who did both counts once; smaller packs and drop-ins don&rsquo;t count. It uses the same calculation as the Intro Offers pages (their 30D view shows the same figure for the same studio). It is not limited to the week they bought the offer, so memberships sold this week to earlier buyers are included. The previous column is the same 30-day calculation as at the end of the previous 7 days, and both use today&rsquo;s data. People who bought recently still have time to convert, so the latest figure tends to creep up as time passes.</p>
   <p><strong>KPIs</strong> come from the commercial KPI notes. A studio counts as new for its first ${WR_KPI.newStudioMonths} months, judged from its first class in the data. Green = on or ahead of the KPI, amber = within 10% below, red = more than 10% below. For established studios, average classes per day is shown for context only.</p>
   <p><strong>Data freshness.</strong> Memberships refresh daily at 08:00 UTC, intro offers at 09:00 UTC and classes at 10:00 UTC. For complete numbers for yesterday, run the report after 10:00 UTC.</p>` +
@@ -2693,26 +2675,25 @@ function wrDocxCover() {
   return wrP(wrRun('ENMEI \u2014 WEEKLY STUDIO REPORT', { bold: true, size: 22, color: WR_X.grey }), { after: 40, keepNext: true });
 }
 
-// Four headline numbers for the week, in boxes: % direct bookings, % third-party, classes cancelled, memberships cancelled.
+// Three headline numbers for the week, in boxes: % direct bookings, % third-party, classes cancelled.
 function wrDocxStrip(d) {
-  const dm = d.metrics.find(x => x.key === 'direct'), cm = d.metrics.find(x => x.key === 'cancelled'), mm_ = d.metrics.find(x => x.key === 'cancelledmem');
+  const dm = d.metrics.find(x => x.key === 'direct'), cm = d.metrics.find(x => x.key === 'cancelled');
   const bc = d.booking && d.booking.cur, bp = d.booking && d.booking.prv;
   const third = bc ? bc.tpPct : null, thirdPrev = bp ? bp.tpPct : null;
   const vs = 'vs previous 7 days';
   const thirdChange = (third != null && thirdPrev != null) ? (Math.abs(third - thirdPrev) < 0.05 ? '\u2013' : `${third > thirdPrev ? '\u25b2 +' : '\u25bc -'}${Math.abs(third - thirdPrev).toFixed(1)}pp`) : '\u2014';
-  const w4 = Math.floor(WR_CONTENT_W / 4), widths = [w4, w4, w4, WR_CONTENT_W - 3 * w4];
+  const w3 = Math.floor(WR_CONTENT_W / 3), widths = [w3, w3, WR_CONTENT_W - 2 * w3];
   const box = (label, value, change, st, w) => wrTc([
     wrP(wrRun(label, { size: 17, color: WR_X.grey }), { after: 0 }),
     wrP(wrRun(value, { size: 40, bold: true }), { after: 0 }),
     wrP(wrRun(change === '\u2014' ? '\u2014' : change === '\u2013' ? `no change ${vs}` : `${change} ${vs}`, { size: 16, color: st.color, fill: st.fill }), { after: 0 }),
   ], w, { fill: 'F6F6F6' });
-  const dSt = wrChgStyle(dm.change.cls), cSt = wrChgStyle(cm.change.cls), mSt = wrChgStyle(mm_ ? mm_.change.cls : 'flat');
+  const dSt = wrChgStyle(dm.change.cls), cSt = wrChgStyle(cm.change.cls);
   // The third-party share is shown without red/green: it is simply the other side of the direct share.
   return wrTbl(widths, [wrTr([
     box('Direct bookings', dm.curr != null ? dm.currText : '\u2014', dm.change.text, dSt, widths[0]),
     box('Third-party bookings', third != null ? `${third.toFixed(1)}%` : '\u2014', thirdChange, { color: WR_X.flatText }, widths[1]),
     box('Classes cancelled', cm.curr != null ? cm.currText : '\u2014', cm.change.text, cSt, widths[2]),
-    box('Memberships cancelled', mm_ && mm_.curr != null ? mm_.currText : '\u2014', mm_ ? mm_.change.text : '\u2014', mSt, widths[3]),
   ])]) + wrP([], { after: 120 });
 }
 function wrDocxSection(d, summary, commentary, pageBreak) {
