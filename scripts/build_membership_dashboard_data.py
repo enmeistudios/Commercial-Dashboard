@@ -126,6 +126,23 @@ SWITCH_REASONS = {"upgrade", "downgrade", "new_home_studio"}
 # than a real gap/departure.
 SWITCH_GAP_DAYS = 3
 
+# ---- What counts as an ONGOING member (owner-approved, Nov 2026) ----------------------------------------------
+# Until this change a membership was "ongoing" until `cancellation_datetime` was set, and `status` was ignored.
+# Memberships that ENDED as done / terminated / converted can have a blank cancellation date, so they stayed
+# "ongoing" forever (the dashboard showed 174 for a studio whose raw count was ~150). The rule is now status-aware.
+#
+#   * An ACTIVE MEMBER right now has one of these statuses (frozen, payment/ding failure and pending included):
+ACTIVE_STATUSES = {"active", "frozen", "payment_failure", "ding_failure",
+                   "pending_customer_activation", "pending_start_date"}
+#   * These statuses are NOT active members (the membership has ended):
+ENDED_STATUSES = {"cancelled", "terminated", "done", "converted"}
+#   * Pending memberships often have no start date yet (or one in the future): they count from their purchase date.
+PENDING_STATUSES = {"pending_customer_activation", "pending_start_date"}
+#   * Any other status (e.g. pending_bank_authorization -- not yet decided with the owner) falls back to the OLD
+#     date-based rule and is reported in the log, so nothing changes silently for it.
+#   * When an ENDED membership has no cancellation date, its end is the first populated of these fields.
+END_DATE_FALLBACK_COLUMNS = ["calculated_end_datetime", "scheduled_end_datetime", "end_date"]
+
 # Reasons that represent genuine, controllable churn (the business could
 # potentially act on these) vs uncontrollable churn, for the
 # Controllable/Uncontrollable split. "other" (once cleaned of renewal
@@ -259,6 +276,7 @@ def pull_and_clean():
     for col in ["start_date", "purchase_date", "cancellation_datetime",
                 "freeze_datetime", "freeze_reactivation_datetime"]:
         df[col] = pd.to_datetime(df[col], utc=True, format="ISO8601", errors="coerce")
+    df = derive_membership_dates(df)     # effective_start / effective_end / is_active_member: the ONE ongoing rule
 
     df["renewal_rate"] = pd.to_numeric(df["renewal_rate"], errors="coerce").fillna(0)
 
@@ -267,6 +285,84 @@ def pull_and_clean():
     df["is_switch_new"] = df["id"].isin(switch_new_ids)
 
     return df
+
+
+def derive_membership_dates(df, now=None):
+    """Adds the three fields every builder uses, so "ongoing" is decided in exactly ONE place:
+
+      effective_start  -- start_date; for PENDING memberships with no start date (or one in the future) the purchase date.
+      effective_end    -- when the membership stopped being ongoing (blank = still ongoing):
+                            ACTIVE statuses  -> no end (status says they are members; any cancellation date is ignored)
+                            ENDED statuses   -> cancellation_datetime if present, otherwise the first populated of
+                                                calculated_end_datetime / scheduled_end_datetime / end_date;
+                                                with none of those the end is unknown, so the membership is treated as
+                                                never ongoing in the history (the live count is status-based and unaffected)
+                            other statuses   -> cancellation_datetime (the previous rule)
+      is_active_member -- the live definition: status is one of ACTIVE_STATUSES.
+
+    cancellation_datetime stays the basis of churn (cancelled_count) and switch detection: an end date derived here
+    never counts as a cancellation. `new_count` also still uses the real start_date."""
+    now = now if now is not None else pd.Timestamp.now(tz="utc")
+    status = df["status"].fillna("").astype(str)
+    for c in END_DATE_FALLBACK_COLUMNS + ["purchase_date"]:
+        if c not in df.columns:
+            df[c] = pd.NaT
+        df[c] = pd.to_datetime(df[c], utc=True, format="ISO8601", errors="coerce")
+    is_active = status.isin(ACTIVE_STATUSES)
+    is_ended = status.isin(ENDED_STATUSES)
+
+    start = df["start_date"]
+    use_purchase = status.isin(PENDING_STATUSES) & df["purchase_date"].notna() & (start.isna() | (start > now))
+    df["effective_start"] = start.where(~use_purchase, df["purchase_date"])
+
+    alt_end = df[END_DATE_FALLBACK_COLUMNS[0]]
+    for c in END_DATE_FALLBACK_COLUMNS[1:]:
+        alt_end = alt_end.fillna(df[c])
+    cancel = df["cancellation_datetime"]
+    end = cancel.copy()                                        # other statuses: the previous rule
+    end = end.where(~is_ended, cancel.fillna(alt_end))         # ended: cancellation date, else the best end date we have
+    end = end.where(~is_active, pd.NaT)                        # active statuses: no end
+    unknown_end = is_ended & end.isna()                        # ended, but nothing says when
+    end = end.where(~unknown_end, df["effective_start"])       # -> never ongoing in the history
+    df["effective_end"] = end
+    df["is_active_member"] = is_active
+    return df
+
+
+def ongoing_at(df, t):
+    """The one history rule: started by t and not ended by t."""
+    return (df["effective_start"] <= t) & (df["effective_end"].isna() | (df["effective_end"] > t))
+
+
+def report_ongoing_rule(df):
+    """Say, in the log, what the status-aware rule changed -- so the effect is visible, not silent."""
+    now = pd.Timestamp.now(tz="utc")
+    status = df["status"].fillna("").astype(str)
+    old = df["start_date"].notna() & (df["start_date"] <= now) & (df["cancellation_datetime"].isna() | (df["cancellation_datetime"] > now))
+    new = df["is_active_member"]
+    studio = df["studio"].fillna(UNASSIGNED_STUDIO)
+    print("\nOngoing members RIGHT NOW, previous rule vs status-aware rule:")
+    print(pd.DataFrame({"studio": studio, "previous_rule": old, "status_aware_rule": new}).groupby("studio").sum().astype(int).to_string())
+    print("\nBy status: memberships | with a cancellation date | with another end date | no end date at all | counted ongoing by the PREVIOUS rule")
+    alt = df[END_DATE_FALLBACK_COLUMNS].notna().any(axis=1)
+    t = pd.DataFrame({"status": status, "memberships": 1, "cancel_date": df["cancellation_datetime"].notna(), "other_end_date": alt,
+                      "no_end_date": df["cancellation_datetime"].isna() & ~alt, "old_rule_ongoing": old})
+    t["class"] = t["status"].map(lambda x: "ACTIVE" if x in ACTIVE_STATUSES else "ended" if x in ENDED_STATUSES else "other (previous rule)")
+    print(t.groupby(["class", "status"]).sum(numeric_only=True).astype(int).to_string())
+    ended_unknown = (status.isin(ENDED_STATUSES) & df["cancellation_datetime"].isna() & ~alt)
+    if ended_unknown.any():
+        print(f"  WARNING: {int(ended_unknown.sum())} ended memberships have NO end date in any field "
+              f"({END_DATE_FALLBACK_COLUMNS + ['cancellation_datetime']}); they are not counted in the history at all. "
+              f"Check which end field Mariana Tek fills for them.")
+    other = ~status.isin(ACTIVE_STATUSES | ENDED_STATUSES)
+    if other.any():
+        print(f"  NOTE: {int(other.sum())} memberships have a status that is neither active nor ended "
+              f"({sorted(status[other].unique().tolist())}); they keep the previous date-based rule until the owner decides.")
+    no_start = df["is_active_member"] & df["effective_start"].isna()
+    if no_start.any():
+        print(f"  WARNING: {int(no_start.sum())} active members have no start date and no purchase date, so they are missing from the history.")
+    mism = (df["is_active_member"] != ongoing_at(df, now)).sum()
+    print(f"  Consistency: live (status) vs history rule at 'now' disagree for {int(mism)} memberships.")
 
 
 def build_live_status(df):
@@ -294,6 +390,8 @@ def build_live_status(df):
 
     result = status_counts.merge(active_revenue, on=["studio", "tier", "membership_name"], how="left")
     result["active_revenue"] = result["active_revenue"].fillna(0)
+    # "Ongoing right now" = active + frozen + payment/ding failure + pending (ACTIVE_STATUSES): the same rule as the history.
+    result["ongoing"] = result[[c for c in sorted(ACTIVE_STATUSES) if c in result.columns]].sum(axis=1).astype(int)
 
     result.insert(0, "as_of_date", pd.Timestamp.now(tz="utc").date().isoformat())
     return result
@@ -321,8 +419,8 @@ def build_history(df):
         figure. Does NOT exclude payment_failure periods historically
         (no clean "resolved" date exists for that), so this is a close
         match to live MRR, not a perfect one, during payment-failure weeks."""
-    valid_start = df["start_date"].notna()
-    start = df.loc[valid_start, "start_date"].min().normalize()
+    valid_start = df["effective_start"].notna()
+    start = df.loc[valid_start, "effective_start"].min().normalize()
     end = pd.Timestamp.now(tz="utc").normalize()
     weeks = pd.date_range(start, end, freq="W-MON")
 
@@ -331,9 +429,7 @@ def build_history(df):
 
     results = []
     for week in weeks:
-        active_mask = (df["start_date"] <= week) & (
-            df["cancellation_datetime"].isna() | (df["cancellation_datetime"] > week)
-        )
+        active_mask = ongoing_at(df, week)
         frozen_mask = active_mask & df["freeze_datetime"].notna() & (df["freeze_datetime"] <= week) & (
             df["freeze_reactivation_datetime"].isna() | (df["freeze_reactivation_datetime"] > week)
         )
@@ -424,7 +520,7 @@ def report_attribution(df):
     they belong to no studio, so they are left out of every studio's numbers.
     Say how many, so that gap is visible instead of silent."""
     no_loc = df["studio"].isna()
-    ongoing = df["cancellation_datetime"].isna() & df["start_date"].notna()
+    ongoing = df["is_active_member"]
     print("\nAttribution (studio = where the membership was purchased):")
     print(df.assign(_studio=df["studio"].fillna(UNASSIGNED_STUDIO)).groupby("_studio").agg(
         memberships=("id", "size"), ongoing=("id", lambda x: int(ongoing[x.index].sum()))).to_string())
@@ -459,8 +555,8 @@ def build_daily(df):
     label in the studio blocks and mentions the count in its status line.
     """
     df = df.assign(studio=df["studio"].fillna(UNASSIGNED_STUDIO)) if df["studio"].isna().any() else df
-    valid_start = df["start_date"].notna()
-    first = df.loc[valid_start, "start_date"].min().normalize()
+    valid_start = df["effective_start"].notna()
+    first = df.loc[valid_start, "effective_start"].min().normalize()
     last = pd.Timestamp.now(tz="utc").normalize() - pd.Timedelta(days=1)
     days = pd.date_range(first, last, freq="D")
     studios = sorted(df["studio"].dropna().unique())
@@ -470,9 +566,7 @@ def build_daily(df):
     rows = []
     for day in days:
         t = day + one_day
-        active_mask = (df["start_date"] <= t) & (
-            df["cancellation_datetime"].isna() | (df["cancellation_datetime"] > t)
-        )
+        active_mask = ongoing_at(df, t)
         frozen_mask = active_mask & df["freeze_datetime"].notna() & (df["freeze_datetime"] <= t) & (
             df["freeze_reactivation_datetime"].isna() | (df["freeze_reactivation_datetime"] > t)
         )
@@ -499,8 +593,8 @@ AGE_BUCKET_LABELS = ["0-30 days", "30-60 days", "60-90 days", "3-6 months",
 
 def build_age_pyramid(df):
     """
-    How long have currently-ongoing members (not cancelled -- includes
-    frozen, same definition used everywhere else) been with us, bucketed
+    How long have currently-ongoing members (an active member: status active, frozen, payment/ding failure or
+    pending -- same definition used everywhere else) been with us, bucketed
     by tenure. Uses real start_date. Note: memberships are 6-month
     commitments with an option to renew -- the 3-6 / 6-12 month buckets
     straddle that natural renewal decision point, worth keeping in mind
@@ -508,8 +602,8 @@ def build_age_pyramid(df):
     necessarily dissatisfaction).
     """
     today = pd.Timestamp.now(tz="utc")
-    ongoing = df[df["cancellation_datetime"].isna()].copy()
-    ongoing["age_days"] = (today - ongoing["start_date"]).dt.days
+    ongoing = df[df["is_active_member"]].copy()
+    ongoing["age_days"] = (today - ongoing["effective_start"]).dt.days
     ongoing["age_bucket"] = pd.cut(ongoing["age_days"], bins=AGE_BUCKET_BINS, labels=AGE_BUCKET_LABELS, right=False)
 
     result = (
@@ -540,13 +634,13 @@ def build_customer_log(df):
         "id", "user_id", "membership_id", "membership_name", "tier", "studio",
         "status", "start_date", "cancellation_datetime", "freeze_datetime",
         "freeze_reactivation_datetime", "renewal_rate", "commitment_length",
-        "is_switch_cancellation",
+        "is_switch_cancellation", "is_active_member", "effective_end",
     ]].copy()
     log_df.columns = [
         "membership_instance_id", "customer_id", "membership_id", "membership_name",
         "tier", "studio", "status", "start_date", "cancellation_datetime",
         "freeze_datetime", "freeze_reactivation_datetime", "renewal_rate", "commitment_length",
-        "is_switch_cancellation",
+        "is_switch_cancellation", "is_active_member", "effective_end",
     ]
 
     def compute_term_end(row):
@@ -618,6 +712,7 @@ def write_to_sheet(df, tab_name, max_retries=4):
 def main():
     df = pull_and_clean()
     report_attribution(df)
+    report_ongoing_rule(df)
 
     print("\nBuilding live status view...")
     live_status_df = build_live_status(df)
