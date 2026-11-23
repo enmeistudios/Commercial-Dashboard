@@ -366,7 +366,7 @@ tbody tr:hover td{background:var(--bg3)}
   <div class="mgrid" id="ov-metrics"></div>
 
   <div class="cc" style="margin-bottom:16px">
-    <div class="cch"><div><div class="cct">Ongoing members over time</div><div class="ccs">Not cancelled -- includes frozen &amp; payment failure</div></div></div>
+    <div class="cch"><div><div class="cct">Ongoing members over time</div><div class="ccs">Active, frozen, payment-failure and pending members &mdash; ended memberships (cancelled, terminated, done, converted) are not counted</div></div></div>
     <div class="h260"><canvas id="chartActive"></canvas></div>
   </div>
 
@@ -647,7 +647,10 @@ tbody tr:hover td{background:var(--bg3)}
     <div class="legend-grid">
       <dl>
         <dt>Ongoing members</dt>
-        <dd>Started and not yet cancelled. Includes frozen and payment-failure memberships -- broader than "active."</dd>
+        <dd>Memberships whose status is <strong>active, frozen, payment failure, ding failure or pending</strong> (activation or start date) &mdash; broader than "active". Memberships that have <strong>ended</strong> (cancelled, terminated, done when a fixed term runs out, or converted into another membership) are <strong>not</strong> counted, even where Mariana Tek has no cancellation date for them. Pending memberships count from their purchase date. It counts <strong>memberships, not people</strong> (someone with two ongoing memberships counts twice), under the studio where each was <strong>purchased</strong>. In the history, an ended membership stops counting at its cancellation date or, if it has none, its recorded end date.</dd>
+
+        <dt class="caveat">Change (Nov 2026): ended memberships are no longer counted as ongoing</dt>
+        <dd>Previously a membership stayed &ldquo;ongoing&rdquo; until a cancellation date was recorded, so memberships that ended as <em>done</em>, <em>terminated</em> or <em>converted</em> without one were counted forever, overstating studios with many ended memberships (the oldest studio most). The rule now follows the membership&rsquo;s status. Historical ongoing-member and revenue charts were recalculated, so they are lower than before. <strong>Churn is unchanged</strong>: it still counts real cancellations only, so a fixed term simply running out is not shown as churn.</dd>
 
         <dt>Active (status mix chart / table)</dt>
         <dd>Strict, real-time status from Mariana Tek. Excludes frozen, payment failure, terminated, etc.</dd>
@@ -1080,14 +1083,18 @@ tbody tr:hover td{background:var(--bg3)}
   <div class="cc" style="margin-bottom:16px">
     <div class="cch">
       <div><div class="cct" id="cp-hm-title">Paid visits heatmap</div><div class="ccs" id="cp-hm-sub">Day of week × class time, selected studio/timeframe</div></div>
-      <div class="coach-select-wrap">
-        <select id="cp-hm-metric" onchange="renderClassPerformance()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:6px;padding:5px 9px;font-size:11.5px">
-          <option value="paid" selected>% Paid Visits</option>
-          <option value="util">% Utilization</option>
-          <option value="count">Class Count</option>
-          <option value="direct">% Direct bookings</option>
-        </select>
+      <div class="ytabs" id="cp-hm-toggle" role="group" aria-label="Heatmap measure" style="margin:0;flex-wrap:wrap">
+        <button type="button" class="ytab active" data-m="paid" onclick="setHeatmapMetric('paid')">% Paid visits</button>
+        <button type="button" class="ytab" data-m="util" onclick="setHeatmapMetric('util')">% Utilization</button>
+        <button type="button" class="ytab" data-m="count" onclick="setHeatmapMetric('count')">Class count</button>
+        <button type="button" class="ytab" data-m="direct" onclick="setHeatmapMetric('direct')">% Direct bookings</button>
       </div>
+      <select id="cp-hm-metric" onchange="setHeatmapMetric(this.value)" style="display:none" aria-hidden="true">
+        <option value="paid" selected>% Paid Visits</option>
+        <option value="util">% Utilization</option>
+        <option value="count">Class Count</option>
+        <option value="direct">% Direct bookings</option>
+      </select>
     </div>
     <div class="toggle-row">
       <div class="toggle-switch" id="cp-compare-toggle" onclick="toggleStudioCompareHeatmap()"><div class="knob"></div></div>
@@ -1203,6 +1210,9 @@ tbody tr:hover td{background:var(--bg3)}
   <div class="legend">
     <div class="legend-grid">
       <dl>
+        <dt>Heatmap: % Direct bookings</dt>
+        <dd>Switch the heatmap to <strong>% Direct bookings</strong> with the toggle above it. Each cell is, for that day and class time over the selected period and studio, <strong>direct paid visits &divide; all paid visits</strong> (direct + third-party). The base is <strong>bookings, not capacity</strong>: a class that is 60% full with every spot booked directly shows 100%. It is a share of the slot&rsquo;s total, not an average of each class&rsquo;s percentage, so a busy class counts for more than a quiet one. Hover a cell to see the counts (&ldquo;x of y paid visits, n classes&rdquo;). Slots with no paid visits are blank, and non-class types (e.g. Recovery Boots) are excluded. The &ldquo;Compare studios side-by-side&rdquo; view uses the same measure.</dd>
+
         <dt>% direct bookings (booking source)</dt>
         <dd>The headline scorecard, and the section below it, split every paid visit (see "Paid visits" above: checked in, plus late cancellations and no-shows that carried a fee) by how it was booked. <strong>Third-party</strong> = booked through ClassPass, Wellhub (formerly Gympass) or FitReserve, identified by Mariana Tek's own reservation tags for those platforms. <strong>Direct</strong> = every other paid visit &mdash; memberships, credit packs, comps and private-class bookings &mdash; so Direct + Third-party always equals Paid visits. <strong>% direct bookings</strong> = direct &divide; all paid visits for the selected studio and timeframe, summed across classes (not an average of per-class percentages); higher means less reliance on third-party platforms. In the heatmap, a cell's direct share is total direct visits divided by total paid visits in that slot. In the weekly chart each bar is 100% of that week's paid visits, with direct at the bottom. Bookings only appear here once the Class Performance data has refreshed with this feature.</dd>
 
@@ -1766,7 +1776,7 @@ function renderOverview() {
   }
 
   document.getElementById('ov-metrics').innerHTML = `
-    <div class="mc"><div class="ml">Ongoing members (not cancelled)</div><div class="mv">${latestOngoing.toLocaleString()}</div>${compHtml.ongoing}</div>
+    <div class="mc"><div class="ml">Ongoing members</div><div class="mv">${latestOngoing.toLocaleString()}</div>${compHtml.ongoing}</div>
     <div class="mc pos"><div class="ml">Monthly Recurring Revenue</div><div class="mv">${fK(currentMRR)}</div>${compHtml.mrr}</div>
     <div class="mc neg"><div class="ml">Cancelled (${TF_LABELS[PAGES.ov.timeframe]})</div><div class="mv">${totalCancelledInPeriod.toLocaleString()}</div>${compHtml.cancelled}</div>
     <div class="mc"><div class="ml">Currently frozen</div><div class="mv">${currentFrozen.toLocaleString()}</div></div>
@@ -2231,8 +2241,8 @@ function wrClassStats(studio, startIso, endIso) {
     booking,
   };
 }
-// Daily membership snapshots (Membership_Daily): "active" = ongoing (not cancelled, incl. frozen and
-// payment-failure) at the END of the window's last day ("frozen" = of those, under an active freeze at that moment); "new" = memberships started in the window,
+// Daily membership snapshots (Membership_Daily): "active" = ongoing (status active, frozen, payment/ding failure or pending; ended
+// memberships excluded) at the END of the window's last day ("frozen" = of those, under an active freeze at that moment); "new" = memberships started in the window,
 // excluding upgrades, downgrades and studio switches -- the same rules as the weekly Membership pages.
 function wrMembership(studio, startIso, endIso) {
   const rows = MEM_DAILY_ROWS.filter(r => r.studio === studio && wrDay(r.date) >= startIso && wrDay(r.date) <= endIso);
@@ -2508,7 +2518,7 @@ function wrInit() { if (!WR.end) WR.end = wrYesterday(); }
 function wrNotesHtml(anyMissing) {
   return `<p><strong>Windows.</strong> By default &ldquo;the last 7 days&rdquo; is the 7 days ending yesterday, compared with the 7 days before that. Use Earlier / Later (steps of 7 days) or the date box to report on a different window.</p>
   <p><strong>% direct bookings</strong> = of the week&rsquo;s paid visits, the share booked directly (memberships, credit packs, comps, private classes); the other split is <strong>third-party</strong> (ClassPass, Wellhub, FitReserve). It is the total of direct visits divided by the total of paid visits, the same calculation as on Class Performance. <strong>Avg paid visit %</strong> is the same per-class average used on Class Performance: the share of class spots that were paid for (checked in, plus late cancels and no-shows that carried a fee, plus private-class holds). Recovery Boots and Full Body are excluded. <strong>Total class attendance</strong> = checked-in visits. <strong>Average classes per day</strong> = classes &divide; 7. <strong>Classes cancelled</strong> = classes that were scheduled in the window and then cancelled, counted on the day they were scheduled, with the same exclusions as classes delivered; fewer is better, so a rise shows red. The Class Performance page&rsquo;s &ldquo;Classes cancelled&rdquo; counts every class type, so it can be higher.</p>
-  <p><strong>Active memberships</strong> = ongoing memberships (not cancelled, including frozen and payment-failure) at the end of the window&rsquo;s last day, counted under the studio where the membership was <strong>purchased</strong> (including all-studio memberships); <strong>new memberships sold</strong> = memberships started in the window, excluding upgrades, downgrades and studio switches &mdash; both on the same rules as the Membership Health pages, calculated daily. <strong>Frozen memberships</strong> = the ongoing memberships that are under an active freeze at that same moment (they are already included in the active count); the grey line shows frozen as a share of active. The change is shown without red or green, since a rise or fall in frozen isn&rsquo;t clearly good or bad.</p>
+  <p><strong>Active memberships</strong> = ongoing memberships (status active, frozen, payment-failure or pending; cancelled, terminated, done and converted memberships are not counted) at the end of the window&rsquo;s last day, counted under the studio where the membership was <strong>purchased</strong> (including all-studio memberships); <strong>new memberships sold</strong> = memberships started in the window, excluding upgrades, downgrades and studio switches &mdash; both on the same rules as the Membership Health pages, calculated daily. <strong>Frozen memberships</strong> = the ongoing memberships that are under an active freeze at that same moment (they are already included in the active count); the grey line shows frozen as a share of active. The change is shown without red or green, since a rise or fall in frozen isn&rsquo;t clearly good or bad.</p>
   <p><strong>Intro offers sold</strong> = intro offers purchased in the window at this studio. Offers that aren&rsquo;t tied to one studio are recorded under &ldquo;All Studios&rdquo; and are not in a single studio&rsquo;s count. <strong>Intro offer conversion (last 30 days)</strong> = of everyone at this studio who bought an intro offer in the 30 days up to the end of the window, the share who have <em>since</em> either joined on any membership tier or bought a pack of 5 or more classes. Someone who did both counts once; smaller packs and drop-ins don&rsquo;t count. It uses the same calculation as the Intro Offers pages (their 30D view shows the same figure for the same studio). It is not limited to the week they bought the offer, so memberships sold this week to earlier buyers are included. The previous column is the same 30-day calculation as at the end of the previous 7 days, and both use today&rsquo;s data. People who bought recently still have time to convert, so the latest figure tends to creep up as time passes.</p>
   <p><strong>KPIs</strong> come from the commercial KPI notes. A studio counts as new for its first ${WR_KPI.newStudioMonths} months, judged from its first class in the data. Green = on or ahead of the KPI, amber = within 10% below, red = more than 10% below. For established studios, average classes per day is shown for context only.</p>
   <p><strong>Data freshness.</strong> Memberships refresh daily at 08:00 UTC, intro offers at 09:00 UTC and classes at 10:00 UTC. For complete numbers for yesterday, run the report after 10:00 UTC.</p>` +
@@ -2992,6 +3002,15 @@ function renderHeatLegend(elId) {
 // (reverted back from the transposed version -- felt clunky with 16
 // time columns squeezed vertically; this wide-and-short layout reads
 // better and is closer to the arrangement in Remy's own notebook).
+function syncHeatmapToggle() {
+  const v = document.getElementById('cp-hm-metric').value;
+  document.querySelectorAll('#cp-hm-toggle .ytab').forEach(b => b.classList.toggle('active', b.dataset.m === v));
+}
+function setHeatmapMetric(m) {
+  document.getElementById('cp-hm-metric').value = m;
+  syncHeatmapToggle();
+  renderClassPerformance();
+}
 function buildHeatmap(containerId, rows, metric) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -3188,8 +3207,9 @@ function renderClassPerformance() {
     paid:   ['Paid visits heatmap',        'Day of week × class time — paid visits as % of capacity (checked in + late cancels & no-shows that carried a fee)'],
     util:   ['Utilization heatmap',        'Day of week × class time — people who actually attended (checked-in only) as % of capacity'],
     count:  ['Class count heatmap',        'Day of week × class time — number of classes held, selected studio/timeframe'],
-    direct: ['Direct bookings heatmap',    'Day of week × class time — share of paid visits booked directly (not via ClassPass, Wellhub or FitReserve); higher is better'],
+    direct: ['Direct bookings heatmap',    'Day of week × class time — of all paid visits in the slot, the share booked directly (not via ClassPass, Wellhub or FitReserve). Out of bookings, not capacity; higher is better'],
   };
+  syncHeatmapToggle();
   const [hmTitle, hmSub] = HM_TEXT[metric] || HM_TEXT.paid;
   document.getElementById('cp-hm-title').textContent = hmTitle;
   document.getElementById('cp-hm-sub').textContent = hmSub;
