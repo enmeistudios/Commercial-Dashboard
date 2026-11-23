@@ -65,6 +65,7 @@ import sys
 import json
 import time
 import requests
+import numpy as np
 import pandas as pd
 from pathlib import Path
 
@@ -363,6 +364,49 @@ def report_ongoing_rule(df):
         print(f"  WARNING: {int(no_start.sum())} active members have no start date and no purchase date, so they are missing from the history.")
     mism = (df["is_active_member"] != ongoing_at(df, now)).sum()
     print(f"  Consistency: live (status) vs history rule at 'now' disagree for {int(mism)} memberships.")
+
+
+def report_active_bridge(df, weeks_back=0):
+    """Reconcile the weekly figures: why can active members change by MORE (or less) than "new minus cancelled"?
+
+    The three numbers are counted on different bases:
+      new        = memberships whose START DATE is in the window (plan switches excluded)
+      cancelled  = memberships whose CANCELLATION DATE is in the window (plan switches excluded), whatever their status is now
+      active     = memberships whose STATUS says they are members at the end of the window
+    so active_end = active_start + new - cancelled + (memberships that moved in or out of the active count
+    without being counted as new or cancelled). This prints those, by cause, so the gap is explained and never silent.
+    Every membership that contributes to the gap is put in exactly one cause (the first that applies), so the
+    check column is always 0.  Window = the 7 days ending at the end of yesterday (UTC), like the weekly report."""
+    t2 = pd.Timestamp.now(tz="utc").normalize() - pd.Timedelta(weeks=weeks_back)
+    t1 = t2 - pd.Timedelta(days=7)
+    a1, a2 = ongoing_at(df, t1), ongoing_at(df, t2)
+    in_win = lambda col: (df[col] > t1) & (df[col] <= t2)
+    new_f = in_win("start_date") & ~df["is_switch_new"]
+    canc_f = in_win("cancellation_datetime") & ~df["is_switch_cancellation"]
+    switch_f = (in_win("start_date") & df["is_switch_new"]) | (in_win("cancellation_datetime") & df["is_switch_cancellation"])
+    adj = (a2.astype(int) - a1.astype(int)) - (new_f.astype(int) - canc_f.astype(int))     # what "new - cancelled" does not explain, per membership
+    zero = pd.Timestamp(0, tz="utc")
+    moved_start = df["effective_start"].fillna(zero) != df["start_date"].fillna(zero)      # counted from the purchase date (pending, no start date yet)
+    nz = adj != 0
+    names = ["plan switches", "pending (from purchase)", "cancelled, still active", "ended, no cancellation", "other"]
+    cat = np.select([nz & switch_f, nz & moved_start, nz & canc_f & a2, nz & ~a2 & ~canc_f], names[:4], default="other")
+    cat = np.where(nz, cat, "")
+    studio = df["studio"].fillna(UNASSIGNED_STUDIO)
+    base = pd.DataFrame({"studio": studio, "active at start": a1.astype(int), "+ new": new_f.astype(int), "- cancelled": canc_f.astype(int), "active at end": a2.astype(int)})
+    tbl = base.groupby("studio").sum()
+    detail = pd.DataFrame({"studio": studio, "adj": adj, "cat": cat})
+    for nme in names:
+        tbl[nme] = detail[detail.cat == nme].groupby("studio")["adj"].sum().reindex(tbl.index).fillna(0).astype(int)
+    tbl.loc["ALL STUDIOS"] = tbl.sum()
+    tbl["check (0)"] = tbl["active at start"] + tbl["+ new"] - tbl["- cancelled"] + tbl[names].sum(axis=1) - tbl["active at end"]
+    tbl = tbl[["active at start", "+ new", "- cancelled"] + names + ["active at end", "check (0)"]].astype(int)
+    print(f"\nActive-membership bridge, {t1.date()} to {t2.date()} (UTC): active at start + new - cancelled + the causes below = active at end")
+    print("  plan switches = upgrades/downgrades/restarts (new and old side, neither counted as new or cancelled)")
+    print("  pending (from purchase) = pending memberships counted active from their purchase date, before they have a start date")
+    print("  cancelled, still active = a cancellation date in the window but the status still says active, so they have NOT left the active count")
+    print("  ended, no cancellation = left the active count (term ended / terminated / converted) without a cancellation date, or started and dropped")
+    print(tbl.to_string())
+    return tbl
 
 
 def build_live_status(df):
@@ -713,6 +757,8 @@ def main():
     df = pull_and_clean()
     report_attribution(df)
     report_ongoing_rule(df)
+    report_active_bridge(df)                    # this week
+    report_active_bridge(df, weeks_back=1)      # the week before, for comparison
 
     print("\nBuilding live status view...")
     live_status_df = build_live_status(df)
